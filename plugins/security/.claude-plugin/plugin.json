@@ -1,0 +1,11 @@
+{
+  "name": "security",
+  "version": "0.1.0",
+  "description": "Auditoria de seguridad de proyecto completo, read-only, con reporte priorizado.",
+  "author": {
+    "name": "Karen Rebeca Ortiz"
+  },
+  "license": "MIT",
+  "keywords": ["owasp","sast","sca","secretos"],
+  "skills": ["./skills/"]
+}

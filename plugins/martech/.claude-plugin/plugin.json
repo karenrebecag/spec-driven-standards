@@ -1,0 +1,11 @@
+{
+  "name": "martech",
+  "version": "0.1.0",
+  "description": "Pipeline de campanas de correo de ATFX: listas, plantillas, programacion y bajas.",
+  "author": {
+    "name": "Karen Rebeca Ortiz"
+  },
+  "license": "MIT",
+  "keywords": ["email","campanas"],
+  "skills": ["./skills/"]
+}

@@ -1,0 +1,10 @@
+workflow: read code before writing | spec first for multi-file (goal/files/API/constraints), wait for approval | summarize+stop after completing, never auto-continue | skip spec for <20-line single-file or "just do it"
+block: git (commit/push/merge/rebase/reset) | deps (install/remove/upgrade) | root configs (tsconfig/package.json/.env) | delete/deploy | db migrations/destructive SQL
+scope: max 3-5 files | ambiguous→ask 1 question, don't guess
+verify: imports/functions/APIs exist before using | "I don't know" > confident wrong answer
+code: comments=WHY only, never WHAT | no extras beyond task | no emojis anywhere
+commits: type(scope): description | one change per commit | message=WHY not WHAT
+style: concise, lead with action, no filler/preamble/restatement
+standards: → @.claude/rules/common/ + @.claude/rules/typescript/ (TS/React) | Astro/Vue/Angular/CSS aún sin archivo de reglas
+security: proyecto completo antes de entregar → /security-audit (reporte a Desktop, read-only) | código recién escrito → security-reviewer | mi propio .claude/ → npx ecc-agentshield scan (--fix modifica config, --opus sube config a la API) | hallazgo → tdd-guide (test que falla primero), nunca fix directo
+vercel: GitHub `karenrebecag` está vinculado a 2 cuentas Vercel (personal team `karenrebecags-projects` + ATOM `atomchatio`). Push → Git deploy BLOCKED: Vercel mapea el autor GH a la cuenta que NO es miembro del team del proyecto (`TEAM_ACCESS_REQUIRED`, docs collaboration team-configuration). No se arregla cambiando email de commit ni quitando Co-authored-by Cursor. Workaround: CLI logueado como miembro del team dueño (`vercel whoami`) → `vercel link --yes --project <proj> --scope <owner-team>` → `vercel --prod --yes --scope <owner-team>`. Eso no “rompe” la verificación: source=cli, el actor es la sesión CLI, no el commit — Git nunca corre el check de membership del autor. Nunca invitar la cuenta extra al team. Fix real: desconectar GitHub de la cuenta Vercel extra para que GH resuelva a un solo team. Deploy sigue en block (pedir aprobación).

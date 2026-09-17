@@ -1,0 +1,11 @@
+{
+  "name": "mac-ops",
+  "version": "0.1.0",
+  "description": "Compresion de medios con el CLI de Clop en macOS.",
+  "author": {
+    "name": "Karen Rebeca Ortiz"
+  },
+  "license": "MIT",
+  "keywords": ["macos","clop","compresion"],
+  "skills": ["./skills/"]
+}

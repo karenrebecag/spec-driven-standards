@@ -1,0 +1,11 @@
+{
+  "name": "standards",
+  "version": "0.1.0",
+  "description": "Agentes y revision del ciclo spec-driven: plan, TDD, review, seguridad, build y limpieza.",
+  "author": {
+    "name": "Karen Rebeca Ortiz"
+  },
+  "license": "MIT",
+  "keywords": ["spec-driven","tdd","code-review","agents"],
+  "skills": ["./skills/"]
+}

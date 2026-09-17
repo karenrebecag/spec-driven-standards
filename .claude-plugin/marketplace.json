@@ -1,0 +1,78 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "spec-driven-standards",
+  "owner": {
+    "name": "Karen Rebeca Ortiz"
+  },
+  "metadata": {
+    "description": "Estandares de trabajo spec-driven y las skills propias, clasificadas por area."
+  },
+  "plugins": [
+    {
+      "name": "standards",
+      "source": "./plugins/standards",
+      "description": "Los 8 agentes del ciclo spec-driven (planner, architect, tdd-guide, code-reviewer, security-reviewer, build-error-resolver, refactor-cleaner, e2e-runner) y lean-review para auditar sobre-ingenieria.",
+      "version": "0.1.0",
+      "category": "workflow",
+      "keywords": [
+        "spec-driven",
+        "tdd",
+        "code-review",
+        "agents"
+      ]
+    },
+    {
+      "name": "atom",
+      "source": "./plugins/atom",
+      "description": "Cortex de Atom: referencia funcional de la plataforma (paneles, nodos, RAG, code tools, MCP) y la guia de implementacion o migracion de un agente desde Flowbuilder/Smarton.",
+      "version": "0.1.0",
+      "category": "development",
+      "keywords": [
+        "atom",
+        "cortex",
+        "agent-builder",
+        "flowbuilder"
+      ]
+    },
+    {
+      "name": "martech",
+      "source": "./plugins/martech",
+      "description": "Operacion de campanas de correo: el pipeline CampaignSender de ATFX (Supabase + Microsoft Graph + dispatcher en VPS).",
+      "version": "0.1.0",
+      "category": "marketing",
+      "keywords": [
+        "email",
+        "campanas",
+        "supabase",
+        "graph"
+      ]
+    },
+    {
+      "name": "security",
+      "source": "./plugins/security",
+      "description": "Auditoria de seguridad de proyecto completo con reporte priorizado: SCA, SAST, secretos, authn/authz, cripto, CI/CD. Fork atribuido de cyber-neo.",
+      "version": "0.1.0",
+      "category": "security",
+      "keywords": [
+        "owasp",
+        "sast",
+        "sca",
+        "secretos",
+        "auditoria"
+      ]
+    },
+    {
+      "name": "mac-ops",
+      "source": "./plugins/mac-ops",
+      "description": "Compresion de imagenes, video, PDF y audio con el CLI de Clop en macOS, con escalas medidas y las trampas del CLI.",
+      "version": "0.1.0",
+      "category": "productivity",
+      "keywords": [
+        "macos",
+        "clop",
+        "compresion",
+        "assets"
+      ]
+    }
+  ]
+}

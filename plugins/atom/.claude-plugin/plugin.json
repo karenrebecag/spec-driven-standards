@@ -1,0 +1,11 @@
+{
+  "name": "atom",
+  "version": "0.1.0",
+  "description": "Cortex de Atom: referencia funcional de la plataforma y la guia paso a paso para implementar o migrar un agente.",
+  "author": {
+    "name": "Karen Rebeca Ortiz"
+  },
+  "license": "MIT",
+  "keywords": ["atom", "cortex", "agent-builder", "flowbuilder"],
+  "skills": ["./skills/"]
+}
