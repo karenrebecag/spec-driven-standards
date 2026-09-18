@@ -1377,6 +1377,30 @@
       "bootstrap": false,
       "descripcion": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.",
       "obtener": "sync de la cuenta Claude"
+    },
+    {
+      "nombre": "pentest",
+      "carpeta": "pentest",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Loop purple-team sobre activos propios — recon y explotación, verificación, y parche con test de regresión que convierte el PoC en prueba. Invocación manual con /pentest. Solo objetivos autorizados en",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "ship",
+      "carpeta": "ship",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Loop de entrega spec-driven — plan aprobado, TDD, revisión en paralelo, corrección con re-review acotada, y hasta PR abierto. Invocación manual con /ship.",
+      "obtener": "instalada a mano en ~/.claude/skills"
     }
   ]
 }

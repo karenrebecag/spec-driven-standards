@@ -1,6 +1,6 @@
 # Catalogo de skills
 
-114 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
+116 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
 
 Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `terceros-mit` de terceros, licencia MIT en el arbol | `terceros-agents` de terceros, gestionada en ~/.agents/skills | `terceros-con-fuente` de terceros, declara su repo de origen pero sin licencia en el arbol | `terceros` de terceros, origen sin verificar | `synced-anthropic` ejemplo de Anthropic, llega por sync de la cuenta | `propia-cuenta` creada en tu cuenta Claude, llega por sync | `sin-determinar` autoria sin determinar: revisala antes de publicarla
 
@@ -157,3 +157,10 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `pptx` | synced-anthropic | — | sync de la cuenta Claude |
 | `skill-creator` | synced-anthropic | — | sync de la cuenta Claude |
 | `xlsx` | synced-anthropic | — | sync de la cuenta Claude |
+
+## sin-clasificar (2)
+
+| skill | origen | fuente | como obtenerla |
+|---|---|---|---|
+| `pentest` | terceros | — | instalada a mano en ~/.claude/skills |
+| `ship` | terceros | — | instalada a mano en ~/.claude/skills |
