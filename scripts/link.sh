@@ -35,8 +35,20 @@ echo "repo:   $REPO"
 echo "config:"
 enlazar "$CLAUDE/CLAUDE.md" "$REPO/config/CLAUDE.md"
 enlazar "$CLAUDE/rules" "$REPO/config/rules"
-enlazar "$CLAUDE/agents" "$REPO/plugins/standards/agents"
 enlazar "$CLAUDE/hooks" "$REPO/plugins/standards/hooks"
+
+# agents: directorio real con un symlink por agente de TODOS los plugins (antes era un symlink
+# unico a standards/agents, que dejaba fuera a delivery/reliability/experience). Asi Claude ve
+# todos los subagentes, como si el marketplace estuviera instalado.
+if [ -L "$CLAUDE/agents" ]; then
+  mkdir -p "$BACKUP"; mv "$CLAUDE/agents" "$BACKUP/agents-symlink-viejo"
+  echo "  respaldo agents (symlink viejo)  ->  ${BACKUP#$HOME/}/agents-symlink-viejo"
+fi
+mkdir -p "$CLAUDE/agents"
+for agente in "$REPO"/plugins/*/agents/*.md; do
+  [ -f "$agente" ] || continue
+  enlazar "$CLAUDE/agents/$(basename "$agente")" "$agente"
+done
 
 echo "skills propias:"
 enlazar "$CLAUDE/skills/ship" "$REPO/plugins/standards/skills/ship"
