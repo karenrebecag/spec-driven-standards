@@ -2,9 +2,9 @@
 
 ## Model Selection
 
-- **Haiku 4.5**: lightweight agents, frequent invocations, pair programming
-- **Sonnet 4.6**: main development work, orchestrating multi-agent workflows
-- **Opus 4.8**: architectural decisions, complex analysis, deepest reasoning only
+- **Haiku 4.5**: lightweight agents, frequent invocations, pair programming. Es el modelo de los subagentes (`CLAUDE_CODE_SUBAGENT_MODEL=haiku`), salvo los que fijan su propio `model` en el frontmatter (planner, architect y code/security-reviewer piden más).
+- **Sonnet 5**: main development work, orchestrating multi-agent workflows
+- **Opus 5**: architectural decisions, complex analysis, deepest reasoning only. Es el modelo principal de la sesión (`settings.json` → `model: opus`).
 
 ## Context Window
 
