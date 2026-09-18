@@ -25,7 +25,7 @@
         "source": "github",
         "repo": "ysyecust/everything-claude-code"
       },
-      "autoUpdate": true
+      "autoUpdate": false
     },
     "claude-plugins-official": {
       "source": {
@@ -63,33 +63,80 @@
   "agentPushNotifEnabled": true,
   "autoMode": {
     "environment": [
-      "### Org-wide",
-      "**Organization**: None configured",
-      "**Cloud provider(s)**: None configured",
-      "**Repository visibility**: assume private unless the remote host and repo name indicate otherwise, or a visibility check in the transcript shows public",
-      "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
-      "**Secrets management**: None configured",
-      "**Default / protected branches**: unknown — no origin remote and no gh data available for this repo",
-      "**CI/CD deploy targets**: None configured",
-      "**Network posture**: None configured",
-      "**Source control**: The trusted repo and its remote(s) only (no additional orgs configured) — as scoped by the Trusted repo and Repository visibility entries above",
-      "**Trusted internal domains**: None configured",
-      "**Trusted cloud buckets**: None configured",
-      "**Key internal services**: None configured",
-      "**Internal package registry**: None configured",
-      "**Sensitive data locations & audiences**: any file or store holding personal data, confidential business data, credentials, regulated data, or similarly sensitive material; preserve exact handles when known and share only with audiences cleared at the [named+specifics] bar",
-      "**Data retention / declassification**: None configured",
-      "**Sensitive remote targets**: any namespace, host, or container whose name carries `prod` or `production` as a whole word or name segment (hyphen/underscore/dot-delimited — e.g. matches `prod-db`, not `producer`)",
-      "**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic",
-      "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
-      "### User-specific",
-      "**Primary use of Claude Code**: software development",
-      "**Trusted repo**: The git repository the agent started in (its working directory) at /Users/karenrebecaog — no remotes are configured, so no remote scoping applies; repo has 0 tracked files",
-      "**Org-specific CLIs**: None configured",
-      "routine under no confirmed <user>/ prefix — no scoping evidence found for this repo"
+      "$defaults",
+      "Organization: freelance product and marketing engineering for Atom Chat (GitHub org AtomGrowth, Vercel team atomchatio) and ATFX Latam (GitHub org ATFXLatam), plus studio and personal work (GitHub orgs PigmentoStudioDev, AurinExperience, KarenRebecaOrtiz). Primary use: software development.",
+      "Source control: GitHub user karenrebecag and organizations AtomGrowth, ATFXLatam, PigmentoStudioDev, AurinExperience, KarenRebecaOrtiz on github.com, and all repositories under them.",
+      "Cloud provider(s): Vercel (personal team karenrebecags-projects and ATOM team atomchatio), Azure, Supabase (org karenrebecag, region us-west-2), Cloudflare, Microsoft 365 / Graph (ATFX tenant), Salesforce (CLI org alias atfx).",
+      "Trusted internal domains: atomchat.io and *.atomchat.io (including analytics.atomchat.io, knowledgemcp.atomchat.io, webflowcollections.atomchat.io, new.atomchat.io), atfxmcp.westus2.cloudapp.azure.com, *.supabase.co for org karenrebecag, mcp.supabase.com, mcp.webflow.com, vercel.com, *.vercel.app.",
+      "Key internal services: Vercel (CLI deploys only), local Supabase CLI MCP at http://localhost:54321/mcp, cloud Supabase MCP at mcp.supabase.com, Microsoft Graph send-as cs.latam@, Flow Studio, Power Automate, Salesforce DX org atfx, Webflow, Atom knowledge MCP, Atom analytics MCP, CampaignSender dispatcher on the Azure VPS.",
+      "CI/CD deploy targets: Vercel production via `vercel --prod --yes --scope <owner-team>` after explicit approval; Azure VPS app at /opt/campaign-sender; Supabase Edge Functions. GitHub-connected Vercel Git deploys are blocked (TEAM_ACCESS_REQUIRED because GitHub karenrebecag maps to two Vercel accounts) and must not be unblocked by inviting the extra GitHub-linked account into the project team.",
+      "Org-specific CLIs: vercel (must be logged in as a member of the owning team), supabase, gh, sf (Salesforce DX, org atfx), wrangler, clop.",
+      "Secrets management: per-project gitignored .env files, CampaignSender .sender-token (mode 0600), Vercel environment variables, Supabase dashboard secrets. None of those live in spec-driven-standards.",
+      "Sensitive data locations & audiences: CampaignSender .env and .sender-token; Supabase campaign lists and unsubscribes for org karenrebecag; Microsoft Graph mailbox cs.latam@; Salesforce atfx org data; any .env, token, or credentials file under Desktop/SoftwareDevProjects. Share only with the named client that owns the data (Atom or ATFX).",
+      "Sensitive remote targets: Vercel production, Azure VPS hostname atfxmcp.westus2.cloudapp.azure.com, Supabase production and Edge Functions, Salesforce production org atfx, Microsoft 365 tenant used for ATFX mail. Also any namespace, host, or container whose name carries prod or production as a whole word or name segment.",
+      "Protected deployment namespaces / environments: Vercel production on teams atomchatio and karenrebecags-projects; Azure /opt/campaign-sender; Supabase production migrations and Edge Functions; Salesforce production org atfx.",
+      "Network posture: ordinary developer Mac with open internet. Local trusted service: Supabase CLI MCP at http://localhost:54321/mcp when supabase start is running.",
+      "Trusted repo: the git repository the agent started in and its configured remotes. The home directory is not a repository and is not a trusted repo."
     ]
   },
   "voiceEnabled": true,
+  "permissions": {
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(yarn add:*)",
+      "Bash(yarn remove:*)",
+      "Bash(bun add:*)",
+      "Bash(bun remove:*)",
+      "Bash(vercel:*)",
+      "Bash(supabase db push:*)",
+      "Bash(supabase db reset:*)"
+    ]
+  },
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "code-reviewer|security-reviewer|qa-reviewer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/review-gate.mjs subagent-stop",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit:*)",
+            "command": "node $HOME/.claude/hooks/review-gate.mjs pre-commit",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/pentest-scope.mjs",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
   "mcpServers": {
     "supabase": {
       "url": "http://localhost:54321/mcp"

@@ -69,6 +69,16 @@ Verify the context before flagging.
 4. If credentials were exposed, they must be rotated, and the user needs to know which ones
 5. Grep the rest of the codebase for the same pattern
 
+## Machine-Readable Verdict (REQUIRED)
+
+The commit gate (`review-gate.mjs`) reads your verdict from your final message. End every review with this exact line, as the last line, with the real counts:
+
+```
+VERDICT: APPROVE|WARNING|BLOCK critical=N high=N
+```
+
+APPROVE only when critical=0 and high=0. Any CRITICAL is BLOCK. Without this line the SubagentStop hook blocks you and asks for it, so write it and stop.
+
 ## Boundaries
 
 Read-only. Reports findings and stops; it does not edit files. That is deliberate — a security fix goes through a failing test, not through this agent.
