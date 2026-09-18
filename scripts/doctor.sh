@@ -14,7 +14,6 @@ echo "symlinks:"
 for par in \
   "$CLAUDE/CLAUDE.md:$REPO/config/CLAUDE.md" \
   "$CLAUDE/rules:$REPO/config/rules" \
-  "$CLAUDE/agents:$REPO/plugins/standards/agents" \
   "$CLAUDE/hooks:$REPO/plugins/standards/hooks" \
   "$CLAUDE/skills/ship:$REPO/plugins/standards/skills/ship" \
   "$CLAUDE/skills/pentest:$REPO/plugins/security/skills/pentest" \
@@ -33,6 +32,20 @@ for par in \
   fi
 done
 
+echo "agents (directorio real con un symlink por agente de cada plugin):"
+esperados=$(ls "$REPO"/plugins/*/agents/*.md 2>/dev/null | wc -l | tr -d ' ')
+enlazados=0
+for agente in "$REPO"/plugins/*/agents/*.md; do
+  [ -f "$agente" ] || continue
+  d="$CLAUDE/agents/$(basename "$agente")"
+  [ -L "$d" ] && [ "$(readlink "$d")" = "$agente" ] && enlazados=$((enlazados + 1))
+done
+if [ "$enlazados" = "$esperados" ] && [ "$esperados" -gt 0 ]; then
+  ok "$enlazados/$esperados agentes enlazados (todos los plugins)"
+else
+  aviso "$enlazados/$esperados agentes enlazados: corre scripts/link.sh"
+fi
+
 echo "settings.json (se sincroniza a mano):"
 if diff -q "$CLAUDE/settings.json" "$REPO/config/settings.json" >/dev/null 2>&1; then
   ok "identico"
@@ -42,7 +55,7 @@ else
 fi
 
 echo "gate de revision registrado en settings.json:"
-for h in review-gate pentest-scope; do
+for h in review-gate pentest-scope release-gate; do
   if grep -q "$h.mjs" "$CLAUDE/settings.json" 2>/dev/null; then
     ok "hook $h registrado"
   else
