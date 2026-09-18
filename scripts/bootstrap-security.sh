@@ -1,27 +1,28 @@
 #!/usr/bin/env bash
-# Trae a ESTA maquina las skills ofensivas de auditoria desde su repo publico de origen y las
-# convierte a skills en el sitio. Cada persona lo corre en su equipo: el material se adquiere
-# desde la fuente, no se redistribuye desde este repo (el repo de origen no declara licencia,
-# asi que redistribuirlo empaquetado no estaria permitido; clonarlo uno mismo si).
+# Trae/actualiza las 78 skills ofensivas (offensive-*) desde su fuente upstream MIT.
+# El plugin `security` ya incluye un snapshot; este script sirve para refrescar a la ultima
+# version desde el origen, o para instalarlas en una maquina sin el plugin.
 #
-# Cubre solo lo que traza a una fuente publica conocida. Las ~40 skills de wireless, Active
-# Directory, cloud y k8s que hay en la maquina original tienen origen sin identificar y NO se
-# tocan aqui: no puedo apuntarte a una fuente que no conozco. Ver catalogo/SKILLS.md.
+# Fuente: SnailSploit/Claude-Red (MIT). Antes se apuntaba a SnailSploit/offensive-checklist,
+# que no declaraba licencia; claude-red es el mismo material con licencia MIT, asi que se puede
+# redistribuir con atribucion (ver plugins/security/skills/ATTRIBUTION-offensive.md).
+#
+# Instala PLANO en ~/.claude/skills/<nombre>/, que es lo que Claude Code descubre (el layout
+# anidado del repo de origen, ~/.claude/skills/claude-red/..., quedaria inerte).
 set -euo pipefail
 
-FUENTE_URL="https://github.com/SnailSploit/offensive-checklist"
-FUENTE_RAW="https://github.com/SnailSploit/offensive-checklist/blob/main"
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FUENTE_URL="https://github.com/SnailSploit/Claude-Red"
 CLAUDE="${CLAUDE_HOME:-$HOME/.claude}"
-SRC_DIR="$CLAUDE/skills-sources/offensive-checklist"
+SRC_DIR="$CLAUDE/skills-sources/claude-red"
 SKILLS_DIR="$CLAUDE/skills"
+MANIFEST="$SKILLS_DIR/.offensive-skills-manifest.txt"
 
-echo "origen:  $FUENTE_URL (sin licencia declarada; uso interno para auditoria autorizada)"
-echo "destino: $SKILLS_DIR/offensive-*"
+echo "origen:  $FUENTE_URL (MIT, SnailSploit / Kai Aizen)"
+echo "destino: $SKILLS_DIR/offensive-*  (plano)"
 echo
 
 command -v git >/dev/null || { echo "falta git"; exit 1; }
-command -v python3 >/dev/null || { echo "falta python3"; exit 1; }
+command -v rsync >/dev/null || { echo "falta rsync"; exit 1; }
 
 if [ -d "$SRC_DIR/.git" ]; then
   echo "actualizando la fuente ya clonada..."
@@ -32,9 +33,24 @@ else
   git clone --depth 1 --quiet "$FUENTE_URL" "$SRC_DIR"
 fi
 
-echo "convirtiendo checklists a skills..."
-python3 "$REPO/scripts/convertir-checklist.py" "$SRC_DIR" "$SKILLS_DIR" "$FUENTE_RAW"
+{
+  echo "# offensive-* instaladas planas en ~/.claude/skills/"
+  echo "# Fuente: $FUENTE_URL (SnailSploit / Kai Aizen)"
+  echo "# Licencia: MIT — redistribuible con atribucion; el LICENSE viaja en el plugin security."
+  echo "# Refrescadas $(date +%Y-%m-%d) por bootstrap-security.sh"
+  echo "#"
+} > "$MANIFEST"
+
+n=0
+while IFS= read -r skilldir; do
+  [ -f "$skilldir/SKILL.md" ] || continue
+  name="$(basename "$skilldir")"
+  case "$name" in offensive-*) ;; *) continue ;; esac
+  rsync -a "$skilldir/" "$SKILLS_DIR/$name/"
+  echo "$name" >> "$MANIFEST"
+  n=$((n + 1))
+done < <(find "$SRC_DIR/Skills" -type d -name 'offensive-*' 2>/dev/null | sort)
 
 echo
-echo "listo. Las skills offensive-* estan en $SKILLS_DIR y se cargan al arrancar la sesion."
-echo "Se actualizan volviendo a correr este script."
+echo "listo. $n skills offensive-* en $SKILLS_DIR, se cargan al arrancar la sesion."
+echo "Uso solo para pruebas autorizadas; el loop /pentest exige alcance en .pentest-scope.json."

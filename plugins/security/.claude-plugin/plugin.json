@@ -1,11 +1,11 @@
 {
   "name": "security",
-  "version": "0.1.0",
-  "description": "Auditoria de seguridad de proyecto completo, read-only, con reporte priorizado.",
+  "version": "0.2.0",
+  "description": "Seguridad: auditoria de proyecto (read-only), loop /pentest sobre activos propios, y las 78 skills ofensivas de claude-red (MIT, SnailSploit) para pruebas autorizadas.",
   "author": {
     "name": "Karen Rebeca Ortiz"
   },
   "license": "MIT",
-  "keywords": ["owasp","sast","sca","secretos"],
+  "keywords": ["owasp", "sast", "sca", "secretos", "pentest", "red-team", "offensive"],
   "skills": ["./skills/"]
 }

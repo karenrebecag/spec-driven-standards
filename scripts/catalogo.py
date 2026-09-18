@@ -53,17 +53,8 @@ PREFIJO_AREA = {"offensive-": "security", "flowstudio-": "automation"}
 
 AREAS = ["standards", "atom", "web", "martech", "security", "automation", "mac-ops", "office-docs"]
 
-# Checklists que existen en el repo de origen (SnailSploit/offensive-checklist): las skills que
-# trazan a uno de estos las trae `bootstrap-security.sh` desde la fuente. Slug de skill -> archivo.
-FUENTE_OFENSIVA = {
-    "xss", "sqli", "ssrf", "ssti", "xxe", "idor", "jwt", "oauth", "rce", "graphql",
-    "open-redirect", "parameter-pollution", "race-condition", "waf-bypass", "file-upload",
-    "request-smuggling", "deserialization", "shellcode", "osint", "osint-methodology",
-    "initial-access", "fuzzing", "fuzzing-course", "ai-security", "bug-identification",
-    "vuln-classes", "crash-analysis", "basic-exploitation", "windows-mitigations",
-    "windows-boundaries", "exploit-development", "exploit-dev-course", "edr-evasion",
-    "mitigations",
-}
+# Todas las offensive-* trazan a SnailSploit/Claude-Red (MIT) y se incluyen en el plugin security
+# con su LICENSE; `bootstrap-security.sh` las refresca desde ese upstream.
 
 # Lo que vive en plugins/ de este repo: skill -> plugin.
 PROPIAS = {
@@ -143,6 +134,8 @@ def origen_de(nombre: str, ruta: Path, fm: dict, fuentes: dict) -> str:
         return "sin-determinar"
     if nombre in PROPIAS:
         return "fork" if (ruta / "ATTRIBUTION.md").is_file() else "propia"
+    if nombre.startswith("offensive-"):
+        return "terceros-mit"  # claude-red (SnailSploit), MIT; LICENSE en el plugin security
     fuente = fuentes.get(nombre)
     if fuente:
         return "propia-cuenta" if fuente == "custom" else "synced-anthropic"
@@ -158,7 +151,7 @@ def origen_de(nombre: str, ruta: Path, fm: dict, fuentes: dict) -> str:
 
 
 def cubierta_por_bootstrap(nombre: str) -> bool:
-    return nombre.startswith("offensive-") and nombre[len("offensive-") :] in FUENTE_OFENSIVA
+    return nombre.startswith("offensive-")  # todas vienen de claude-red (MIT)
 
 
 def como_obtener(nombre: str, origen: str, ruta: Path) -> str:
@@ -169,7 +162,7 @@ def como_obtener(nombre: str, origen: str, ruta: Path) -> str:
     if origen == "terceros-agents":
         return f"~/.agents/skills/{ruta.name}"
     if cubierta_por_bootstrap(nombre):
-        return "scripts/bootstrap-security.sh (desde origen)"
+        return "/plugin install security@spec-driven-standards, o scripts/bootstrap-security.sh"
     return "instalada a mano en ~/.claude/skills"
 
 
