@@ -1,0 +1,9 @@
+{
+  "name": "reliability",
+  "version": "0.1.0",
+  "description": "Observabilidad, SLO, incidentes y postmortems: /observe, /incident, /learn. Incluye subagentes SRE/Incident/Chaos de terceros (MIT/Apache, ver ATTRIBUTION).",
+  "author": { "name": "Karen Rebeca Ortiz" },
+  "license": "MIT",
+  "keywords": ["sre", "observability", "slo", "incident", "postmortem"],
+  "skills": ["./skills/"]
+}

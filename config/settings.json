@@ -122,6 +122,11 @@
             "if": "Bash(git commit:*)",
             "command": "node $HOME/.claude/hooks/review-gate.mjs pre-commit",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/release-gate.mjs",
+            "timeout": 15
           }
         ]
       },

@@ -1847,6 +1847,18 @@
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
+      "nombre": "ci",
+      "carpeta": "ci",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Diseña o revisa la pipeline de CI — lint, test unitario, integración, E2E, seguridad, build y artefactos. Invocación manual con /ci.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
       "nombre": "ci-test-optimization",
       "carpeta": "ci-test-optimization",
       "area": "sin-clasificar",
@@ -1967,6 +1979,18 @@
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
+      "nombre": "discover",
+      "carpeta": "discover",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Convierte una petición en problema, usuario, hipótesis, alcance, exclusiones, riesgos y métrica de éxito, antes de escribir una línea de spec. Invocación manual con /discover.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
       "nombre": "discover-testing",
       "carpeta": "discover-testing",
       "area": "sin-clasificar",
@@ -2060,6 +2084,30 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when you need to design functional test plans or cases for business flows, UI, data, and integrations; triggers include functional testing and functional test cases.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "incident",
+      "carpeta": "incident",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Guía el manejo de un incidente — triage, severidad, comunicación, evidencias, mitigación, línea temporal y seguimiento. Invocación manual con /incident.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "learn",
+      "carpeta": "learn",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Convierte la evidencia post-release o post-incidente en decisiones — hipótesis confirmada/refutada, acciones correctivas, deuda técnica y nuevos ítems de backlog. Invocación manual con /learn.",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
@@ -2255,6 +2303,18 @@
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
+      "nombre": "observe",
+      "carpeta": "observe",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Define la instrumentación y las consultas operativas — eventos de producto, métricas técnicas, logs estructurados y trazas. Invocación manual con /observe.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
       "nombre": "pairwise-testing",
       "carpeta": "pairwise-testing",
       "area": "sin-clasificar",
@@ -2408,6 +2468,18 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when you need to analyze production-incident evidence, impact, and follow-up actions; triggers include production incident analysis.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "production-readiness",
+      "carpeta": "production-readiness",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Checklist que impide considerar una funcionalidad \"lista\" sin owner, señales de salud, logs, métrica, alerta, SLO y runbook. Invocación manual con /production-readiness.",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
@@ -2636,6 +2708,18 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when you need to select an executable regression test set from known test assets; triggers include regression test selection.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "release",
+      "carpeta": "release",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Produce el dossier de release y lo deja listo para el release-gate — versión, changelog, riesgos, migraciones, feature flags, plan de despliegue, smoke tests y rollback. Invocación manual con /release",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
@@ -2900,6 +2984,18 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when auditing or trimming process residue from Skills, Prompts, comments, or docs; triggers include process prose cleanup, review residue, and current-state rewriting.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "spec",
+      "carpeta": "spec",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Genera una especificación trazable — requisitos funcionales y no funcionales, criterios de aceptación, dependencias, datos, seguridad y plan de pruebas. Invocación manual con /spec.",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {

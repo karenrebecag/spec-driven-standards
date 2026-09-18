@@ -1,0 +1,9 @@
+{
+  "name": "delivery",
+  "version": "0.1.0",
+  "description": "CI/CD, release y despliegue: pipeline, dossier de release, production-readiness. Incluye subagentes DevOps/Deployment de terceros (MIT/Apache, ver ATTRIBUTION).",
+  "author": { "name": "Karen Rebeca Ortiz" },
+  "license": "MIT",
+  "keywords": ["ci-cd", "release", "deploy", "devops", "rollback"],
+  "skills": ["./skills/"]
+}
