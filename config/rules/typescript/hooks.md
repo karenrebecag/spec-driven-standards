@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+---
+
 # TypeScript/JavaScript Hooks
 
 Extends: ../common/hooks.md
@@ -15,4 +23,6 @@ Applies to: **/*.ts, **/*.tsx, **/*.js, **/*.jsx
 
 ## Configuration
 
-Hooks configured in `~/.claude/settings.json`.
+Los hooks de formato/`tsc`/`console.log` los provee el plugin everything-claude-code, no
+`settings.json`. En `~/.claude/settings.json` vive solo el gate de revisión
+(`review-gate.mjs`: SubagentStop + PreToolUse de commit). Ver `common/hooks.md`.

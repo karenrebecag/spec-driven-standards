@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+---
+
 # TypeScript/JavaScript Patterns
 
 Extends: ../common/patterns.md

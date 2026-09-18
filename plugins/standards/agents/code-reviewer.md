@@ -110,6 +110,16 @@ Verdict: WARNING — 2 HIGH issues should be resolved before commit.
 
 Verdicts: **Approve** with no CRITICAL or HIGH. **Warning** with HIGH only. **Block** with any CRITICAL.
 
+## Machine-Readable Verdict (REQUIRED)
+
+The commit gate (`review-gate.mjs`) reads your verdict from your final message. End every review with this exact line, as the last line, with the real counts:
+
+```
+VERDICT: APPROVE|WARNING|BLOCK critical=N high=N
+```
+
+APPROVE only when critical=0 and high=0. Without this line the SubagentStop hook blocks you and asks for it, so write it and stop.
+
 ## Reviewing AI-Generated Changes
 
 Prioritize behavioral regressions and edge cases, trust-boundary assumptions, hidden coupling and accidental architecture drift.

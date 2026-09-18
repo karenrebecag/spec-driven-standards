@@ -5,8 +5,10 @@
 1. **Research & Reuse** — search GitHub, docs, package registries before building
 2. **Plan** — use planner agent: PRD, architecture, task list, dependencies, risks
 3. **TDD** — write tests first (RED → GREEN → IMPROVE), target 80%+ coverage
-4. **Review** — apply code-reviewer agent immediately after writing code
-5. **Commit** — conventional commits with detailed WHY messages, then push
+4. **Review** — code-reviewer + security-reviewer in parallel; each ends with its machine-readable VERDICT
+5. **Ship** — el commit y el PR los abre `/ship` después de que el gate valida el diff aprobado. **Merge y deploy son de Karen**, nunca de un agente.
+
+This order is what `/ship` runs; the commit gate (`review-gate.mjs`) makes step 4→5 non-optional.
 
 ## Bug Fixes: Root Cause, Not Symptom
 

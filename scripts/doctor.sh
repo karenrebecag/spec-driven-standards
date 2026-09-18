@@ -15,6 +15,9 @@ for par in \
   "$CLAUDE/CLAUDE.md:$REPO/config/CLAUDE.md" \
   "$CLAUDE/rules:$REPO/config/rules" \
   "$CLAUDE/agents:$REPO/plugins/standards/agents" \
+  "$CLAUDE/hooks:$REPO/plugins/standards/hooks" \
+  "$CLAUDE/skills/ship:$REPO/plugins/standards/skills/ship" \
+  "$CLAUDE/skills/pentest:$REPO/plugins/security/skills/pentest" \
   "$CLAUDE/skills/lean-review:$REPO/plugins/standards/skills/lean-review" \
   "$CLAUDE/skills/email-campaigns:$REPO/plugins/martech/skills/email-campaigns" \
   "$CLAUDE/skills/security-audit:$REPO/plugins/security/skills/security-audit" \
@@ -36,6 +39,20 @@ if diff -q "$CLAUDE/settings.json" "$REPO/config/settings.json" >/dev/null 2>&1;
 else
   aviso "difiere. Diferencias:"
   diff "$REPO/config/settings.json" "$CLAUDE/settings.json" | sed 's/^/         /' | head -20
+fi
+
+echo "gate de revision registrado en settings.json:"
+for h in review-gate pentest-scope; do
+  if grep -q "$h.mjs" "$CLAUDE/settings.json" 2>/dev/null; then
+    ok "hook $h registrado"
+  else
+    aviso "settings.json no registra $h.mjs: ese guard no se hace cumplir"
+  fi
+done
+if node --test "$REPO"/plugins/standards/hooks/*.test.mjs >/dev/null 2>&1; then
+  ok "tests de los hooks en verde"
+else
+  aviso "los tests de los hooks fallan: revisa plugins/standards/hooks/"
 fi
 
 echo "doble carga de skills propias (symlink + plugin instalado):"

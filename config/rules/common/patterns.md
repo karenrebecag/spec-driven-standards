@@ -17,7 +17,10 @@ Separate data access from business logic via standard interface:
 
 ## API Response Format
 
-Consistent structure across all endpoints:
+Consistent structure across all endpoints. One shape, defined by the typed contract in
+`typescript/patterns.md` (`ApiResponse<T>`):
 ```
-{ status, data: T | null, error: string | null, meta?: { total, page, limit } }
+{ success: boolean, data?: T, error?: string, meta?: { total, page, limit } }
 ```
+`success` is the discriminator (not `status`); `data`/`error` are optional and mutually
+exclusive by convention.
