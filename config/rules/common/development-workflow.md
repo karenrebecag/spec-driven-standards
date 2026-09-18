@@ -10,6 +10,19 @@
 
 This order is what `/ship` runs; the commit gate (`review-gate.mjs`) makes step 4→5 non-optional.
 
+## Ciclo de vida completo (más allá del commit)
+
+`/ship` cubre de plan a PR. El ciclo completo, por skill:
+
+`/discover` (problema, hipótesis, métrica) → `/spec` (requisitos trazables) → `/ship` (implementa,
+revisa, gate de commit) → `/release` (dossier: CI, aprobaciones, rollback, migraciones, owner) →
+deploy (Karen) → `/observe` (instrumentación) → `/incident` si algo se cae → `/learn` (evidencia →
+decisiones) → de vuelta a `/discover`.
+
+Dos gates lo protegen: el **review-gate** responde "¿está revisado para integrarse?" (bloquea el
+commit); el **release-gate** responde "¿se puede exponer, observar y revertir?" (bloquea el deploy
+sin `.release-approval.json` vigente). Merge y deploy siguen siendo de Karen.
+
 ## Bug Fixes: Root Cause, Not Symptom
 
 A ticket names a symptom. The fix goes where all callers route through.

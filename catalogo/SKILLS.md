@@ -1,6 +1,6 @@
 # Catalogo de skills
 
-278 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
+286 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
 
 Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `terceros-mit` de terceros, licencia MIT en el arbol | `terceros-agents` de terceros, gestionada en ~/.agents/skills | `terceros-con-fuente` de terceros, declara su repo de origen pero sin licencia en el arbol | `terceros` de terceros, origen sin verificar | `synced-anthropic` ejemplo de Anthropic, llega por sync de la cuenta | `propia-cuenta` creada en tu cuenta Claude, llega por sync | `sin-determinar` autoria sin determinar: revisala antes de publicarla
 
@@ -158,7 +158,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `skill-creator` | synced-anthropic | — | sync de la cuenta Claude |
 | `xlsx` | synced-anthropic | — | sync de la cuenta Claude |
 
-## sin-clasificar (164)
+## sin-clasificar (172)
 
 | skill | origen | fuente | como obtenerla |
 |---|---|---|---|
@@ -201,6 +201,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `capacity-planning-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `change-impact-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `chaos-testing` | terceros | — | instalada a mano en ~/.claude/skills |
+| `ci` | terceros | — | instalada a mano en ~/.claude/skills |
 | `ci-test-optimization` | terceros | — | instalada a mano en ~/.claude/skills |
 | `circuit-breaker-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `code-review` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -211,6 +212,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `decision-table-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `dependency-failure-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `disaster-recovery-testing` | terceros | — | instalada a mano en ~/.claude/skills |
+| `discover` | terceros | — | instalada a mano en ~/.claude/skills |
 | `discover-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `distributed-trace-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `edge-case-discovery` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -219,6 +221,8 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `failover-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `flaky-test-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `functional-testing` | terceros | — | instalada a mano en ~/.claude/skills |
+| `incident` | terceros | — | instalada a mano en ~/.claude/skills |
+| `learn` | terceros | — | instalada a mano en ~/.claude/skills |
 | `llm-consistency-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `llm-evaluation-design` | terceros | — | instalada a mano en ~/.claude/skills |
 | `llm-hallucination-testing` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -235,6 +239,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `mutation-testing-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `negative-scenario-discovery` | terceros | — | instalada a mano en ~/.claude/skills |
 | `observability-design-review` | terceros | — | instalada a mano en ~/.claude/skills |
+| `observe` | terceros | — | instalada a mano en ~/.claude/skills |
 | `pairwise-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `pentest` | terceros | — | instalada a mano en ~/.claude/skills |
 | `performance-bottleneck-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -248,6 +253,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `pr-test-impact-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `product-quality-perspective` | terceros | — | instalada a mano en ~/.claude/skills |
 | `production-incident-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
+| `production-readiness` | terceros | — | instalada a mano en ~/.claude/skills |
 | `production-verification` | terceros | — | instalada a mano en ~/.claude/skills |
 | `project-delivery-perspective` | terceros | — | instalada a mano en ~/.claude/skills |
 | `prompt-injection-testing` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -267,6 +273,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `regression-optimization` | terceros | — | instalada a mano en ~/.claude/skills |
 | `regression-scope-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `regression-test-selection` | terceros | — | instalada a mano en ~/.claude/skills |
+| `release` | terceros | — | instalada a mano en ~/.claude/skills |
 | `release-testing-workflow` | terceros | — | instalada a mano en ~/.claude/skills |
 | `reliability-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `requirement-ambiguity-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -289,6 +296,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `skill-change-verification` | terceros | — | instalada a mano en ~/.claude/skills |
 | `skill-prose-review` | terceros | — | instalada a mano en ~/.claude/skills |
 | `skill-prose-trim` | terceros | — | instalada a mano en ~/.claude/skills |
+| `spec` | terceros | — | instalada a mano en ~/.claude/skills |
 | `sprint-testing-workflow` | terceros | — | instalada a mano en ~/.claude/skills |
 | `state-transition-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `technical-design-quality-review` | terceros | — | instalada a mano en ~/.claude/skills |

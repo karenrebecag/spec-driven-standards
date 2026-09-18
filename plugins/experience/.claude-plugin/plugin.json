@@ -1,0 +1,9 @@
+{
+  "name": "experience",
+  "version": "0.1.0",
+  "description": "UX y accesibilidad: revisión WCAG (axe/Lighthouse/teclado/lector de pantalla/contraste). Incluye accessibility-tester/checker de terceros (MIT/Apache, ver ATTRIBUTION).",
+  "author": { "name": "Karen Rebeca Ortiz" },
+  "license": "MIT",
+  "keywords": ["accessibility", "wcag", "ux", "a11y"],
+  "skills": ["./skills/"]
+}

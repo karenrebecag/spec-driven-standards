@@ -73,6 +73,58 @@
         "compresion",
         "assets"
       ]
+    },
+    {
+      "name": "product",
+      "source": "./plugins/product",
+      "description": "Discovery y especificacion spec-driven a medida: /discover (problema, hipotesis, metrica de exito) y /spec (requisitos trazables).",
+      "version": "0.1.0",
+      "category": "product",
+      "keywords": [
+        "discovery",
+        "spec",
+        "product",
+        "requisitos"
+      ]
+    },
+    {
+      "name": "delivery",
+      "source": "./plugins/delivery",
+      "description": "CI/CD, release y despliegue: /ci, /release, /production-readiness + release-gate. Subagentes DevOps/Deployment de terceros (MIT/Apache, ver ATTRIBUTION).",
+      "version": "0.1.0",
+      "category": "devops",
+      "keywords": [
+        "ci-cd",
+        "release",
+        "deploy",
+        "rollback"
+      ]
+    },
+    {
+      "name": "reliability",
+      "source": "./plugins/reliability",
+      "description": "Observabilidad, SLO, incidentes y postmortems: /observe, /incident, /learn. Subagentes SRE/Incident/Chaos de terceros (MIT/Apache).",
+      "version": "0.1.0",
+      "category": "reliability",
+      "keywords": [
+        "sre",
+        "observability",
+        "slo",
+        "incident"
+      ]
+    },
+    {
+      "name": "experience",
+      "source": "./plugins/experience",
+      "description": "UX y accesibilidad (WCAG, axe/Lighthouse, teclado, lector de pantalla, contraste). accessibility-tester/checker de terceros (MIT/Apache).",
+      "version": "0.1.0",
+      "category": "quality",
+      "keywords": [
+        "accessibility",
+        "wcag",
+        "ux",
+        "a11y"
+      ]
     }
   ]
 }
