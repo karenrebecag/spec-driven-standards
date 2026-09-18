@@ -1,0 +1,8 @@
+{
+  "name": "data",
+  "version": "0.1.0",
+  "description": "Especialistas de datos: administración de bases de datos, PostgreSQL, SQL e ingeniería de datos (ETL/pipelines). Subagentes de terceros (VoltAgent, MIT; ver ATTRIBUTION).",
+  "author": { "name": "Karen Rebeca Ortiz" },
+  "license": "MIT",
+  "keywords": ["database", "postgres", "sql", "data-engineering", "etl"]
+}

@@ -2027,6 +2027,18 @@
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
+      "nombre": "encontrar-skills",
+      "carpeta": "encontrar-skills",
+      "area": "sin-clasificar",
+      "origen": "synced-anthropic",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "esta skill sirve para encontrar skills",
+      "obtener": "sync de la cuenta Claude"
+    },
+    {
       "nombre": "equivalence-partitioning",
       "carpeta": "equivalence-partitioning",
       "area": "sin-clasificar",

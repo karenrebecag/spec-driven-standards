@@ -18,6 +18,11 @@ for par in \
   "$CLAUDE/skills/ship:$REPO/plugins/standards/skills/ship" \
   "$CLAUDE/skills/pentest:$REPO/plugins/security/skills/pentest" \
   "$CLAUDE/skills/lean-review:$REPO/plugins/standards/skills/lean-review" \
+  "$CLAUDE/skills/api-design-patterns:$REPO/plugins/standards/skills/api-design-patterns" \
+  "$CLAUDE/skills/git-advanced:$REPO/plugins/standards/skills/git-advanced" \
+  "$CLAUDE/skills/security-hardening:$REPO/plugins/security/skills/security-hardening" \
+  "$CLAUDE/skills/security-audit-deep:$REPO/plugins/security/skills/security-audit-deep" \
+  "$CLAUDE/skills/performance-optimization:$REPO/plugins/reliability/skills/performance-optimization" \
   "$CLAUDE/skills/email-campaigns:$REPO/plugins/martech/skills/email-campaigns" \
   "$CLAUDE/skills/security-audit:$REPO/plugins/security/skills/security-audit" \
   "$CLAUDE/skills/clop-compress:$REPO/plugins/mac-ops/skills/clop-compress"; do

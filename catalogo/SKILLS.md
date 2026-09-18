@@ -1,6 +1,6 @@
 # Catalogo de skills
 
-286 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
+287 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
 
 Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `terceros-mit` de terceros, licencia MIT en el arbol | `terceros-agents` de terceros, gestionada en ~/.agents/skills | `terceros-con-fuente` de terceros, declara su repo de origen pero sin licencia en el arbol | `terceros` de terceros, origen sin verificar | `synced-anthropic` ejemplo de Anthropic, llega por sync de la cuenta | `propia-cuenta` creada en tu cuenta Claude, llega por sync | `sin-determinar` autoria sin determinar: revisala antes de publicarla
 
@@ -158,7 +158,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `skill-creator` | synced-anthropic | — | sync de la cuenta Claude |
 | `xlsx` | synced-anthropic | — | sync de la cuenta Claude |
 
-## sin-clasificar (172)
+## sin-clasificar (173)
 
 | skill | origen | fuente | como obtenerla |
 |---|---|---|---|
@@ -216,6 +216,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `discover-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `distributed-trace-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `edge-case-discovery` | terceros | — | instalada a mano en ~/.claude/skills |
+| `encontrar-skills` | synced-anthropic | — | sync de la cuenta Claude |
 | `equivalence-partitioning` | terceros | — | instalada a mano en ~/.claude/skills |
 | `error-handling-design-review` | terceros | — | instalada a mano en ~/.claude/skills |
 | `failover-testing` | terceros | — | instalada a mano en ~/.claude/skills |

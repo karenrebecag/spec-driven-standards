@@ -50,7 +50,7 @@
     {
       "name": "security",
       "source": "./plugins/security",
-      "description": "Auditoria de seguridad de proyecto completo con reporte priorizado: SCA, SAST, secretos, authn/authz, cripto, CI/CD. Fork atribuido de cyber-neo.",
+      "description": "Auditoria de seguridad: scanner rapido security-audit (fork de cyber-neo) + auditoria rigurosa de 6 fases security-audit-deep (Cloudflare, MIT) + security-hardening (rohitg00, Apache) + loop pentest y skills ofensivas.",
       "version": "0.1.0",
       "category": "security",
       "keywords": [
@@ -111,6 +111,19 @@
         "observability",
         "slo",
         "incident"
+      ]
+    },
+    {
+      "name": "data",
+      "source": "./plugins/data",
+      "description": "Especialistas de datos: administracion de bases de datos, PostgreSQL, SQL e ingenieria de datos (ETL/pipelines). Subagentes de terceros (VoltAgent, MIT; ver ATTRIBUTION).",
+      "version": "0.1.0",
+      "category": "development",
+      "keywords": [
+        "database",
+        "postgres",
+        "sql",
+        "data-engineering"
       ]
     },
     {
