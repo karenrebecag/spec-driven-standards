@@ -127,6 +127,11 @@
             "type": "command",
             "command": "node $HOME/.claude/hooks/release-gate.mjs",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/pentest-scope.mjs",
+            "timeout": 15
           }
         ]
       },

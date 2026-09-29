@@ -14,8 +14,9 @@
 // no que el rollback realmente funcione. Sube a validacion real cuando haya un runner de smoke.
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const DEPLOY_RE = /\b(vercel\s+(deploy\s+)?.*--prod|vercel\s+--prod|supabase\s+db\s+push|supabase\s+db\s+reset)\b/
 const APPROVALS = ['qa', 'security', 'release']
@@ -98,4 +99,13 @@ function main() {
   process.exit(0)
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main()
+// argv[1] conserva el symlink (~/.claude/hooks) pero import.meta.url ya es el realpath: se comparan reales.
+function isEntrypoint() {
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+  } catch {
+    return false
+  }
+}
+
+if (isEntrypoint()) main()

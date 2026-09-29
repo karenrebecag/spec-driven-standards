@@ -15,8 +15,9 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const REVIEWERS = ['code-reviewer', 'security-reviewer', 'qa-reviewer']
 const CODE_EXT = /\.(m?[jt]sx?|py|go|rs|rb|php|java|kt|swift|c|cc|cpp|h|hpp|cs|scala|sh|sql|astro|vue|svelte)$/i
@@ -189,4 +190,13 @@ function main() {
 }
 
 // Solo corre como CLI, no cuando el test lo importa.
-if (import.meta.url === `file://${process.argv[1]}`) main()
+// argv[1] conserva el symlink (~/.claude/hooks) pero import.meta.url ya es el realpath: se comparan reales.
+function isEntrypoint() {
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+  } catch {
+    return false
+  }
+}
+
+if (isEntrypoint()) main()
