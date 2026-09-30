@@ -110,7 +110,7 @@
       "nombre": "motion-design",
       "carpeta": "motion-design",
       "area": "web",
-      "origen": "propia-cuenta",
+      "origen": "synced-anthropic",
       "plugin": null,
       "licencia": null,
       "fuente": null,
@@ -1291,7 +1291,7 @@
       "licencia": null,
       "fuente": null,
       "bootstrap": false,
-      "descripcion": "docs (living docs people share, comment on and edit; use only when the user asks for one: names a doc, document, page, memo, spec, PRD, runbook or write-up, asks for somewhere to share or keep editing",
+      "descripcion": "docs (editable docs people share and comment on; the default for any document, named as a doc or not: a document, report, proposal, resume, cover letter, letter, contract, policy, form, template, work",
       "obtener": "sync de la cuenta Claude"
     },
     {
@@ -1303,7 +1303,7 @@
       "licencia": "Proprietary. LICENSE.txt has complete terms",
       "fuente": null,
       "bootstrap": false,
-      "descripcion": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.d",
+      "descripcion": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx). Triggers include: any mention of Microsoft Word Documents, such as 'Word d",
       "obtener": "sync de la cuenta Claude"
     },
     {
@@ -1544,6 +1544,18 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when you need to verify API contract compatibility, consumer expectations, and schema change risk; triggers include API contract testing.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "api-design-patterns",
+      "carpeta": "api-design-patterns",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "REST API design with resource naming, pagination, versioning, and OpenAPI spec generation",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
@@ -2099,6 +2111,30 @@
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
+      "nombre": "git-advanced",
+      "carpeta": "git-advanced",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Advanced git workflows including worktrees, bisect, interactive rebase, hooks, and recovery techniques",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "google-workspace",
+      "carpeta": "google-workspace",
+      "area": "sin-clasificar",
+      "origen": "synced-anthropic",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Read this before the first Google Drive, Docs, Sheets or Slides connector call whenever the task creates or changes a Google file. Use this skill whenever the user wants to create or change a Google D",
+      "obtener": "sync de la cuenta Claude"
+    },
+    {
       "nombre": "incident",
       "carpeta": "incident",
       "area": "sin-clasificar",
@@ -2108,6 +2144,18 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Guía el manejo de un incidente — triage, severidad, comunicación, evidencias, mitigación, línea temporal y seguimiento. Invocación manual con /incident.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "kali",
+      "carpeta": "kali",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Enciende la VM KaliLab (UTM) si esta apagada, verifica que responde por SSH y la deja lista como entorno aislado para investigacion pasiva (analisis de archivos sospechosos, OSINT sobre casos de traba",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
@@ -2360,6 +2408,18 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when you need to form evidence-based performance bottleneck hypotheses and validation steps; triggers include performance bottleneck analysis.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "performance-optimization",
+      "carpeta": "performance-optimization",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Web performance optimization including bundle analysis, lazy loading, caching strategies, and Core Web Vitals",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
@@ -2855,6 +2915,18 @@
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {
+      "nombre": "research",
+      "carpeta": "research",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Investigacion tecnica antes de la spec — documentacion oficial, implementaciones de referencia y codigo propio, en un Reference Brief citado que fija el estandar de calidad antes de tocar codigo. Auto",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
       "nombre": "resilience-testing",
       "carpeta": "resilience-testing",
       "area": "sin-clasificar",
@@ -2912,6 +2984,30 @@
       "fuente": null,
       "bootstrap": false,
       "descripcion": "Use this skill when you need evidence-bounded secrets-exposure-review analysis and validation preparation; triggers include 敏感信息暴露审查 and secrets-exposure-review.",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "security-audit-deep",
+      "carpeta": "security-audit-deep",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Security guidance and vulnerability review for codebases, APIs, services, CLI tools, libraries, and daemons. Use for security questions, focused reviews, vulnerability research, security audits, or pe",
+      "obtener": "instalada a mano en ~/.claude/skills"
+    },
+    {
+      "nombre": "security-hardening",
+      "carpeta": "security-hardening",
+      "area": "sin-clasificar",
+      "origen": "terceros",
+      "plugin": null,
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Application security covering input validation, auth, headers, secrets management, and dependency auditing",
       "obtener": "instalada a mano en ~/.claude/skills"
     },
     {

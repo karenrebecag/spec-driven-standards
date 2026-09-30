@@ -1,6 +1,6 @@
 # Catalogo de skills
 
-287 skills instaladas, 7 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
+295 skills instaladas, 6 de autoria propia. Generado por `scripts/catalogo.py`; no se edita a mano.
 
 Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `terceros-mit` de terceros, licencia MIT en el arbol | `terceros-agents` de terceros, gestionada en ~/.agents/skills | `terceros-con-fuente` de terceros, declara su repo de origen pero sin licencia en el arbol | `terceros` de terceros, origen sin verificar | `synced-anthropic` ejemplo de Anthropic, llega por sync de la cuenta | `propia-cuenta` creada en tu cuenta Claude, llega por sync | `sin-determinar` autoria sin determinar: revisala antes de publicarla
 
@@ -26,7 +26,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `ascii-animations` | terceros | — | instalada a mano en ~/.claude/skills |
 | `diagram-design` | terceros-agents | — | ~/.agents/skills/diagram-design |
 | `i18n-expert` | terceros-agents | — | ~/.agents/skills/i18n-expert |
-| `motion-design` | propia-cuenta | — | sync de la cuenta Claude |
+| `motion-design` | synced-anthropic | — | sync de la cuenta Claude |
 | `penpot-uiux-design` | terceros-agents | — | ~/.agents/skills/penpot-uiux-design |
 | `transitions-dev` | terceros-agents | — | ~/.agents/skills/transitions-dev |
 | `ui-ux-pro-max` | terceros-agents | — | ~/.agents/skills/ui-ux-pro-max |
@@ -158,7 +158,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `skill-creator` | synced-anthropic | — | sync de la cuenta Claude |
 | `xlsx` | synced-anthropic | — | sync de la cuenta Claude |
 
-## sin-clasificar (173)
+## sin-clasificar (181)
 
 | skill | origen | fuente | como obtenerla |
 |---|---|---|---|
@@ -176,6 +176,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `ai-generated-test-review` | terceros | — | instalada a mano en ~/.claude/skills |
 | `ai-safety-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `api-contract-testing` | terceros | — | instalada a mano en ~/.claude/skills |
+| `api-design-patterns` | terceros | — | instalada a mano en ~/.claude/skills |
 | `api-design-quality-review` | terceros | — | instalada a mano en ~/.claude/skills |
 | `api-error-contract-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `api-idempotency-testing` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -222,7 +223,10 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `failover-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `flaky-test-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `functional-testing` | terceros | — | instalada a mano en ~/.claude/skills |
+| `git-advanced` | terceros | — | instalada a mano en ~/.claude/skills |
+| `google-workspace` | synced-anthropic | — | sync de la cuenta Claude |
 | `incident` | terceros | — | instalada a mano en ~/.claude/skills |
+| `kali` | terceros | — | instalada a mano en ~/.claude/skills |
 | `learn` | terceros | — | instalada a mano en ~/.claude/skills |
 | `llm-consistency-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `llm-evaluation-design` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -244,6 +248,7 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `pairwise-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `pentest` | terceros | — | instalada a mano en ~/.claude/skills |
 | `performance-bottleneck-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
+| `performance-optimization` | terceros | — | instalada a mano en ~/.claude/skills |
 | `performance-regression-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `performance-result-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `performance-test-gatling` | terceros | — | instalada a mano en ~/.claude/skills |
@@ -285,11 +290,14 @@ Origen: `propia` escrita por ti | `fork` fork atribuido de un tercero | `tercero
 | `requirement-traceability-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `requirements-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `requirements-analysis-plus` | terceros | — | instalada a mano en ~/.claude/skills |
+| `research` | terceros | — | instalada a mano en ~/.claude/skills |
 | `resilience-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `retry-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `risk-based-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `root-cause-analysis` | terceros | — | instalada a mano en ~/.claude/skills |
 | `secrets-exposure-review` | terceros | — | instalada a mano en ~/.claude/skills |
+| `security-audit-deep` | terceros | — | instalada a mano en ~/.claude/skills |
+| `security-hardening` | terceros | — | instalada a mano en ~/.claude/skills |
 | `security-requirement-review` | terceros | — | instalada a mano en ~/.claude/skills |
 | `security-testing` | terceros | — | instalada a mano en ~/.claude/skills |
 | `session-security-testing` | terceros | — | instalada a mano en ~/.claude/skills |
