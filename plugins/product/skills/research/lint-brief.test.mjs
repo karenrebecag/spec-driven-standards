@@ -467,11 +467,38 @@ test('readProjectVersions reads Package.swift and package.json', () => {
   assert.deepEqual(readProjectVersions(dir), { 'swift-tools': '6.2', react: '^19.0.0', vitest: '~2.1.0', node: '>=20' })
 })
 
-test('readProjectVersions skips missing files silently', () => {
+test('readProjectVersions falls back to the running Node version when there is no manifest', () => {
   const dir = mkdtempSync(join(tmpdir(), 'brief-'))
-  assert.deepEqual(readProjectVersions(dir), {})
+  const nodeVersion = process.versions.node
+  // Repo sin manifiesto: A3 debe poder comprobarse contra el runtime, no quedar sin clave.
+  assert.deepEqual(readProjectVersions(dir), { node: nodeVersion })
+  // Un package.json sin engines tampoco aporta claves: mismo fallback.
   writeFileSync(join(dir, 'package.json'), '{}')
-  assert.deepEqual(readProjectVersions(dir), {})
+  assert.deepEqual(readProjectVersions(dir), { node: nodeVersion })
+})
+
+test('an explicit engines.node overrides the runtime fallback', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'brief-'))
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ engines: { node: '>=20' } }))
+  assert.deepEqual(readProjectVersions(dir), { node: '>=20' })
+})
+
+test('the fallback does not fire when a manifest contributed any key', () => {
+  // Package.swift solo: hay clave (swift-tools), no se anade node.
+  const swiftDir = mkdtempSync(join(tmpdir(), 'brief-'))
+  writeFileSync(join(swiftDir, 'Package.swift'), '// swift-tools-version: 6.2\n')
+  assert.deepEqual(readProjectVersions(swiftDir), { 'swift-tools': '6.2' })
+  // package.json con deps y sin engines: hay claves (deps), no se anade node.
+  const depsDir = mkdtempSync(join(tmpdir(), 'brief-'))
+  writeFileSync(join(depsDir, 'package.json'), JSON.stringify({ dependencies: { react: '^19.0.0' } }))
+  assert.deepEqual(readProjectVersions(depsDir), { react: '^19.0.0' })
+})
+
+test('a brief pinning node by major matches the runtime full version through A3', () => {
+  // sameVersion compara solo los componentes que ambos declaran: node=22 casa con 22.11.0.
+  assert.deepEqual(rules(brief({ versiones: 'node=22' }), { node: '22.11.0' }), [])
+  assert.deepEqual(rules(brief({ versiones: 'node=22.11.0' }), { node: '22.11.0' }), [])
+  assert.deepEqual(rules(brief({ versiones: 'node=21' }), { node: '22.11.0' }), ['A3'])
 })
 
 test('extractUrls returns unique urls from doc and ref tags only', () => {
