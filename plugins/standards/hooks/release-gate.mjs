@@ -14,8 +14,8 @@
 // no que el rollback realmente funcione. Sube a validacion real cuando haya un runner de smoke.
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { join, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const DEPLOY_RE = /\b(vercel\s+(deploy\s+)?.*--prod|vercel\s+--prod|supabase\s+db\s+push|supabase\s+db\s+reset)\b/
@@ -26,8 +26,36 @@ export function isDeployCommand(command) {
   return DEPLOY_RE.test(command)
 }
 
+// Reportes exigidos cuando la spec marco superficie expuesta: campo -> que evidencia es.
+const SURFACE_REPORTS = [
+  ['security_report', 'pentest (/pentest)'],
+  ['qa_report', 'QA de release (release-testing-workflow / production-verification)'],
+]
+
+// Expuesto = el campo esta presente y no es false. Un booleano true, o cualquier valor que no
+// sea false (incluido un "true"/1 de un dossier escrito a mano), exige reportes; un campo ausente
+// (dossier viejo) mantiene el comportamiento previo. Se falla cerrado ante un valor ambiguo.
+function isSurfaceExposed(dossier) {
+  return 'superficie_expuesta' in dossier && dossier.superficie_expuesta !== false
+}
+
+// Verificador por defecto de un reporte: existe, es un ARCHIVO (no un directorio) y no esta vacio.
+// Un existsSync a secas aceptaba "." o un archivo vacio como evidencia. `p` ya viene resuelto.
+function isReportFile(p) {
+  const s = statSync(p, { throwIfNoEntry: false })
+  return !!s && s.isFile() && s.size > 0
+}
+
+// Crea el verificador real contra disco, atado a la raiz del proyecto donde vive el dossier.
+// Exportado para probar la resolucion de ruta y el chequeo de archivo sin pasar por el hook.
+export function reportChecker(cwd) {
+  return (p) => isReportFile(isAbsolute(p) ? p : join(cwd, p))
+}
+
 // Devuelve { allow, reason } dado el dossier, el SHA que se despliega y el ahora en ms.
-export function evaluateRelease(dossier, sha, nowMs) {
+// `reportExists` es inyectable para mantener la funcion pura y testeable; el entrypoint pasa un
+// verificador real contra el disco. Solo se consulta cuando la superficie esta expuesta.
+export function evaluateRelease(dossier, sha, nowMs, { reportExists = isReportFile } = {}) {
   if (!dossier || typeof dossier !== 'object') {
     return { allow: false, reason: 'Despliegue bloqueado: no hay .release-approval.json. Corre /release para producir el dossier (CI, aprobaciones, rollback, migraciones, owner).' }
   }
@@ -36,6 +64,20 @@ export function evaluateRelease(dossier, sha, nowMs) {
   if (dossier.ci_green !== true) faltan.push('CI no esta en verde para este SHA')
   for (const a of APPROVALS) {
     if (!dossier.approvals || dossier.approvals[a] !== true) faltan.push(`falta aprobacion de ${a}`)
+  }
+  // Superficie expuesta (lo marca /spec): el booleano no basta, exige un archivo de reporte real.
+  // HACK: el gate comprueba que el archivo exista y no este vacio, no que corresponda a este SHA
+  // ni que el pentest/QA realmente pasara. Subir a atar el reporte al SHA (por nombre o contenido)
+  // cuando un reporte viejo colandose sea un riesgo observado.
+  if (isSurfaceExposed(dossier)) {
+    for (const [field, label] of SURFACE_REPORTS) {
+      const ruta = dossier[field]
+      if (typeof ruta !== 'string' || ruta.trim() === '') {
+        faltan.push(`superficie expuesta: falta ${field}, el reporte de ${label}`)
+      } else if (!reportExists(ruta)) {
+        faltan.push(`superficie expuesta: ${field} no apunta a un archivo con contenido (${ruta}), no hay evidencia de ${label}`)
+      }
+    }
   }
   if (!dossier.rollback_plan || String(dossier.rollback_plan).trim() === '') faltan.push('falta plan de rollback')
   if (dossier.migrations_state === undefined || dossier.migrations_state === null || String(dossier.migrations_state).trim() === '') faltan.push('falta estado de migraciones de datos')
@@ -78,13 +120,22 @@ function main() {
   if (!isDeployCommand(command)) process.exit(0)
 
   const cwd = input.cwd || process.cwd()
-  let sha
+
+  let result
   try {
-    sha = git(cwd, ['rev-parse', 'HEAD']).slice(0, 8)
-  } catch {
-    sha = ''
+    let sha
+    try {
+      sha = git(cwd, ['rev-parse', 'HEAD']).slice(0, 8)
+    } catch {
+      sha = ''
+    }
+    // reportChecker resuelve las rutas relativas a la raiz del proyecto (donde vive el dossier).
+    result = evaluateRelease(readDossier(cwd), sha, Date.now(), { reportExists: reportChecker(cwd) })
+  } catch (err) {
+    // Un gate de deploy falla CERRADO: ante un error inesperado, deniega con el motivo en vez de
+    // dejar pasar el despliegue (un exit distinto de la denegacion no bloquearia la tool).
+    result = { allow: false, reason: `Despliegue bloqueado: el release-gate fallo al evaluar (${err && err.message ? err.message : err}). Revisa el dossier.` }
   }
-  const result = evaluateRelease(readDossier(cwd), sha, Date.now())
   if (result.allow) process.exit(0)
 
   process.stdout.write(
