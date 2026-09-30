@@ -20,6 +20,19 @@ El `review-gate` ya respondió "¿está revisado para integrarse?". Este respond
    destructiva no se despliega junto al código que la necesita; va antes, compatible hacia atrás.
 4. **Exposición** — feature flag o estrategia (canary / progresivo). Si no aplica, decláralo.
 5. **Smoke tests** — la lista mínima que confirma que el despliegue quedó sano en producción.
+5b. **QA de release y pentest — condicional a la superficie.** Si la spec marcó
+   `superficie_expuesta: sí`, este dossier NO se firma sin dos evidencias reales para este SHA:
+   - **QA de release:** corre `release-testing-workflow` (o `production-verification` para el
+     post-deploy). Deja el reporte en un archivo local.
+   - **Pentest:** corre `/pentest` contra tu preview/staging propio (nunca producción ni terceros),
+     bajo `.pentest-scope.json` vigente. El loop cierra cuando el vector que funcionaba deja de
+     funcionar, con su test de regresión. Deja el reporte local.
+   Sin superficie expuesta, este paso se declara `n/a` y se sigue. Ante un cambio sin spec o sin
+   flag, decide explícitamente y ante la duda trátalo como expuesto. Los reportes van a una ruta
+   relativa a la raíz del repo y llevan el SHA en el nombre (p.ej. `reports/pentest-<sha>.md`), que
+   es como el `release-gate` los resuelve. `/pentest` es la única vía que ejecuta skills
+   `offensive-*`; `/ship` nunca lo hace. Las skills viven en tu máquina vía `scripts/bootstrap-qa.sh`
+   (QA) y el plugin `security` (offensive-*); no se redistribuyen.
 6. **Rollback** — el plan concreto para revertir (alias anterior, revert, flag off). No es opcional.
 7. **Owner de on-call** — quién responde si algo se cae.
 8. **CI** — confirma verde para ese SHA exacto.
@@ -32,7 +45,10 @@ Escribe `.release-approval.json` en la raíz del proyecto:
 {
   "sha": "<8 chars de HEAD>",
   "ci_green": true,
+  "superficie_expuesta": false,
   "approvals": { "qa": true, "security": true, "release": true },
+  "security_report": "<ruta al reporte de pentest, o null si superficie_expuesta=false>",
+  "qa_report": "<ruta al reporte de QA de release, o null si superficie_expuesta=false>",
   "rollback_plan": "revertir alias a la versión previa",
   "migrations_state": "none",
   "owner": "<on-call>",
@@ -43,7 +59,12 @@ Escribe `.release-approval.json` en la raíz del proyecto:
 ```
 
 Los tres `approvals` requieren que QA, seguridad y release hayan firmado sobre este SHA — no los
-marques en `true` sin esa firma. Muestra el dossier a Karen antes de escribirlo.
+marques en `true` sin esa firma. Copia `superficie_expuesta` desde la spec (`sí → true`). Cuando es
+`true`, el `release-gate` **exige** que `security_report` y `qa_report` apunten a archivos
+existentes (no basta el booleano): son los reportes del paso 5b, con el SHA en el nombre. Esa
+verificación del gate llega con su propio cambio de hook (`release-gate.mjs`, PR aparte); hasta que
+ese PR entre, la exigencia vive en esta prosa pero aún no la hace cumplir el hook. Muestra el
+dossier a Karen antes de escribirlo.
 
 ## Límite
 `/release` prepara y habilita; **no despliega**. El deploy lo corre Karen (regla `ask`) y el
