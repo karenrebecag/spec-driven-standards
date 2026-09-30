@@ -6,13 +6,21 @@ su fuente; el tercero es el mapa de todo lo demás.
 ## 1. Los plugins del stack (instalables)
 
 ```bash
-/plugin marketplace add <url-de-este-repo>
+/plugin marketplace add karenrebecag/spec-driven-standards
 /plugin install standards@spec-driven-standards   # agentes spec-driven + lean-review
 /plugin install atom@spec-driven-standards         # Cortex de Atom
 /plugin install martech@spec-driven-standards      # campañas de correo
 /plugin install security@spec-driven-standards     # auditoría de proyecto (security-audit)
 /plugin install mac-ops@spec-driven-standards      # compresión con Clop (solo macOS)
+/plugin install data@spec-driven-standards         # especialistas de datos (DB/Postgres/SQL/ETL)
 ```
+
+Los subagentes de terceros (VoltAgent MIT, rohitg00 Apache) viajan dentro de los plugins con su
+LICENSE y su `ATTRIBUTION.md`. La auditoría rigurosa `security-audit-deep` (Cloudflare, MIT) va en
+el plugin `security` junto al scanner rápido `security-audit`.
+
+`config/settings.json` es la config de usuario de esta máquina (modelo, auto mode, MCP de
+Supabase CLI en localhost). No la copies: cada quien configura la suya. Las `rules/` sí.
 
 Las reglas de trabajo (`config/rules/`) no viajan en un plugin — no es una capacidad del
 harness. Cada quien las copia una vez:
@@ -40,6 +48,9 @@ Las otras ~44 skills ofensivas que hay en la máquina original (wireless, Active
 k8s, bluetooth) tienen origen sin identificar y **no** las cubre el bootstrap: no hay una fuente
 conocida a la que apuntar. Están listadas en `catalogo/SKILLS.md` por si alguien reconoce su
 repo y lo añade.
+
+Las skills de QA (naodeng/awesome-qa-skills) son **PolyForm Noncommercial**, así que tampoco se
+empaquetan: cada persona las trae de la fuente con `./scripts/bootstrap-qa.sh` (uso no comercial).
 
 > Alternativa más sólida: para seguridad con licencia real, el pack ECC (MIT) y el marketplace
 > oficial (p. ej. 42crunch) traen skills de auditoría mantenidas. Si el equipo prefiere no
