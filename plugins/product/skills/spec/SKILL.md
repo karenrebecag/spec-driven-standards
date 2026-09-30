@@ -17,10 +17,24 @@ discovery y a un criterio de aceptación.
 3. **Requisitos no funcionales** — rendimiento, disponibilidad, accesibilidad (ver plugin
    `experience`), i18n, seguridad. Con umbrales, no adjetivos ("< 200ms p95", no "rápido").
 4. **Criterios de aceptación** — por requisito, en forma verificable (dado/cuando/entonces). Es lo
-   que `qa-reviewer` mapea contra los tests.
+   que `qa-reviewer` mapea contra los tests. Si la sección 7 marcó superficie expuesta, cada vector
+   ofensivo lleva su propio criterio verificable ("un IDOR en `GET /orders/:id` de otro usuario
+   devuelve 403", no "es seguro").
 5. **Datos** — qué entidades, qué cambia en el esquema, qué migración (y su reversibilidad).
 6. **Dependencias** — servicios, APIs, flags, y qué pasa si cada uno falla.
-7. **Seguridad** — superficies nuevas: input en frontera de confianza, auth, secretos.
+7. **Seguridad** — no solo declara las superficies nuevas, **decide** qué se ataca. Si el cambio
+   toca una superficie sensible (auth, permisos, endpoints públicos, uploads, pagos, webhooks,
+   input en frontera de confianza, `fetch` a URL de usuario), aplica la skill `threat-modeling` y
+   deja escrito:
+   - `superficie_expuesta: sí | no` — el flag que `/release` y el `release-gate` leen después.
+     En el dossier JSON de `/release` se traduce a booleano: `sí → true`, `no → false`. Ante la
+     duda (cambio sin spec o sin flag claro), `sí`.
+   - Cuando es `sí`: las familias `offensive-*` que aplican al cambio, por criterio y por nombre
+     (p.ej. `offensive-idor` para rutas con ids de recurso, `offensive-jwt` para tokens,
+     `offensive-ssrf` para fetch a URLs de usuario, `offensive-sqli` para queries con input). Esto
+     es una decisión escrita, no ejecución: nada ofensivo corre en `/spec`. La ejecución ocurre en
+     `/release` vía `/pentest`, bajo `.pentest-scope.json`.
+   - Secretos nuevos y dónde viven.
 8. **Plan de pruebas** — qué se cubre con unit / integración / e2e, y qué queda fuera y por qué.
 
 ## Reglas

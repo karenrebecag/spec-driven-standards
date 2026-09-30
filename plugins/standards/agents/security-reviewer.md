@@ -51,6 +51,30 @@ Search for hardcoded secrets. Review the high-risk surfaces: auth, API endpoints
 | No rate limiting on a public endpoint | HIGH | Throttling middleware |
 | Passwords or tokens written to logs | MEDIUM | Sanitize log output |
 
+### 4. Offensive criteria for the surfaces the spec flagged
+
+When the spec marked `superficie_expuesta: sí`, review the diff through the criteria of the
+`offensive-*` families the spec named — as a lens, not as an execution. Apply the criterion from
+this prompt; do **not** invoke the `offensive-*` Skill tool here (that path is `/pentest`, gated by
+`pentest-scope`, and belongs in `/release`, not in this read-only review). `/ship` passes the spec's
+flag in your prompt.
+
+If there is no spec or no flag (a small or unspecced change is allowed under the house rules), treat
+the flag as `sí` whenever the diff itself touches auth, resource ids in a route, `fetch` to a
+user-supplied URL, SQL near user input, or a public endpoint — apply the lens anyway rather than
+skipping it silently.
+
+| Family the spec named | What to look for in the diff |
+|---|---|
+| `offensive-idor` | Routes that take a resource id — is ownership checked, or only authentication? |
+| `offensive-jwt` | Token creation/verification — algorithm pinned, signature and expiry verified, no `alg:none` |
+| `offensive-ssrf` | `fetch`/request built from user input — host allowlist, no redirect-following to internal IPs |
+| `offensive-sqli` | Queries near user input — parameterized, never string-concatenated |
+| `offensive-api-abuse` | Public endpoints — rate limiting, no mass-assignment of protected fields |
+
+A confirmed issue here is a finding like any other: it feeds the VERDICT counts and goes to
+`tdd-guide` as a failing test. The actual exploit-and-verify loop runs later in `/release`.
+
 ## Principles
 
 Defense in depth. Least privilege. Fail securely — errors must not expose internals. Never trust input. Keep dependencies current.
