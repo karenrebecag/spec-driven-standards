@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseVerdict, isCodeDiff, evaluateCommit } from './review-gate.mjs'
+import { parseVerdict, isCodeDiff, evaluateCommit, resolveStatePath } from './review-gate.mjs'
 
 test('parseVerdict reads a well-formed APPROVE line', () => {
   const text = 'blah blah\n## Review Summary\nVERDICT: APPROVE critical=0 high=0\n'
@@ -90,4 +90,44 @@ test('evaluateCommit blocks when a reviewer did not APPROVE', () => {
 test('evaluateCommit blocks when no review state exists at all', () => {
   assert.equal(evaluateCommit(null, HASH).allow, false)
   assert.equal(evaluateCommit({}, HASH).allow, false)
+})
+
+// Worktrees: `git rev-parse --git-dir` devuelve una ruta ABSOLUTA. Unirla a cwd con join() la
+// convertia en <cwd>/Users/.../worktrees/x: el estado se escribia dentro del arbol de trabajo,
+// cambiaba el hash del diff y el veredicto del reviewer quedaba "desactualizado" en silencio.
+test('resolveStatePath respeta un git-dir absoluto (worktree)', () => {
+  const abs = '/repo/.git/worktrees/feat'
+  assert.equal(resolveStatePath('/elsewhere/wt', abs), '/repo/.git/worktrees/feat/claude-review.json')
+})
+
+test('resolveStatePath resuelve un git-dir relativo contra cwd', () => {
+  assert.equal(resolveStatePath('/repo', '.git'), '/repo/.git/claude-review.json')
+})
+
+test('worktree real: el estado cae fuera del arbol y no ensucia el diff', async () => {
+  const { execFileSync } = await import('node:child_process')
+  const { mkdtempSync, realpathSync, writeFileSync, mkdirSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join, dirname } = await import('node:path')
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'review-gate-wt-')))
+  const repo = join(base, 'repo')
+  const wt = join(base, 'wt')
+  const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' })
+  try {
+    mkdirSync(repo)
+    g(repo, 'init', '-q', '-b', 'main')
+    g(repo, 'config', 'user.email', 't@t')
+    g(repo, 'config', 'user.name', 't')
+    writeFileSync(join(repo, 'a.ts'), 'x\n')
+    g(repo, 'add', '.')
+    g(repo, 'commit', '-q', '-m', 'i')
+    g(repo, 'worktree', 'add', '-q', wt, '-b', 'feat/w')
+    const p = resolveStatePath(wt, g(wt, 'rev-parse', '--git-dir').trim())
+    assert.equal(p.startsWith(wt + '/'), false)
+    mkdirSync(dirname(p), { recursive: true })
+    writeFileSync(p, '{}')
+    assert.equal(g(wt, 'status', '--porcelain'), '')
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
 })

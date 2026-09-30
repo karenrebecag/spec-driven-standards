@@ -19,6 +19,12 @@ disparen el SubagentStop del gate.
 Un objetivo concreto: una feature, un fix o un refactor que quepa en 3–5 archivos. Si no cabe,
 pásalo primero por `planner` y parte en fases mergeables por separado.
 
+Un Reference Brief de `/research` aprobado (`Estado: AUTO` o `APROBADO`) en
+`docs/research/` de ESTA rama, salvo nivel "omitir" (hasta 20 líneas de código y sin tocar
+dependencias). El `planner` lo lee antes de diseñar. No es disciplina blanda: `research-gate.mjs`
+deniega escribir código por encima de ese umbral sin brief aprobado en la rama, así que un `/ship`
+que se salte `/research` se detiene en el primer archivo.
+
 ## Pasos
 
 ### 1. Plan — y PARA
