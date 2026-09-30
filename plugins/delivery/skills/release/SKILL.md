@@ -23,14 +23,17 @@ El `review-gate` ya respondió "¿está revisado para integrarse?". Este respond
 5b. **QA de release y pentest — condicional a la superficie.** Si la spec marcó
    `superficie_expuesta: sí`, este dossier NO se firma sin dos evidencias reales para este SHA:
    - **QA de release:** corre `release-testing-workflow` (o `production-verification` para el
-     post-deploy). Deja el reporte en un archivo local.
+     post-deploy). Deja el reporte en `reports/qa-<sha>.md` en el repo.
    - **Pentest:** corre `/pentest` contra tu preview/staging propio (nunca producción ni terceros),
      bajo `.pentest-scope.json` vigente. El loop cierra cuando el vector que funcionaba deja de
-     funcionar, con su test de regresión. Deja el reporte local.
+     funcionar, con su test de regresión. Deja el reporte en `reports/pentest-<sha>.md`.
+   Ambos reportes se **commitean** con el cambio: así viajan en el PR y el `release-gate` puede
+   además comprobar por diff que los tests de regresión entraron con este SHA. Cada hallazgo lleva
+   su línea `Regresion: <path>::<test>` (ver `/pentest` paso 6), que es lo que el `release-verifier`
+   usa para confirmar el cierre.
    Sin superficie expuesta, este paso se declara `n/a` y se sigue. Ante un cambio sin spec o sin
-   flag, decide explícitamente y ante la duda trátalo como expuesto. Los reportes van a una ruta
-   relativa a la raíz del repo y llevan el SHA en el nombre (p.ej. `reports/pentest-<sha>.md`), que
-   es como el `release-gate` los resuelve. `/pentest` es la única vía que ejecuta skills
+   flag, decide explícitamente y ante la duda trátalo como expuesto. Los reportes llevan el SHA de
+   HEAD en el nombre, que es como el `release-gate` los resuelve. `/pentest` es la única vía que ejecuta skills
    `offensive-*`; `/ship` nunca lo hace. Las skills viven en tu máquina vía `scripts/bootstrap-qa.sh`
    (QA) y el plugin `security` (offensive-*); no se redistribuyen.
 6. **Rollback** — el plan concreto para revertir (alias anterior, revert, flag off). No es opcional.
