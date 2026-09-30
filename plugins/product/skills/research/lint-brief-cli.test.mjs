@@ -60,6 +60,30 @@ test('lintFile returns the lint errors for a valid brief as empty', async () => 
   assert.deepEqual(await lintFile(file, { project: dir, checkUrls: false }), [])
 })
 
+// El efecto real del fallback: en un repo SIN manifiesto, un brief que fija node=<major>
+// pasa A3 de punta a punta (no solo readProjectVersions), porque compara contra el runtime.
+const nodeMajor = process.versions.node.split('.')[0]
+
+test('lintFile passes A3 for a manifest-less repo when the brief pins the running node major', async () => {
+  const { dir, file } = setup(brief({ versiones: `node=${nodeMajor}` }), null)
+  assert.deepEqual(await lintFile(file, { project: dir, checkUrls: false }), [])
+})
+
+test('lintFile still fails A3 for a manifest-less repo when the brief pins a different node major', async () => {
+  const otro = String(Number(nodeMajor) + 1)
+  const { dir, file } = setup(brief({ versiones: `node=${otro}` }), null)
+  const errs = await lintFile(file, { project: dir, checkUrls: false })
+  assert.deepEqual(errs.map((e) => e.rule), ['A3'])
+  assert.match(errs[0].message, /caducado/)
+})
+
+test('the CLI exits 0 with LINT: PASS for a manifest-less repo pinning the running node major', () => {
+  const { dir, file } = setup(brief({ versiones: `node=${nodeMajor}` }), null)
+  const r = run(file, '--project', dir, '--no-check-urls')
+  assert.equal(r.status, 0)
+  assert.equal(r.lines.at(-1), 'LINT: PASS errors=0')
+})
+
 test('lintFile merges URL failures from an injected fetcher as URL rule entries', async () => {
   const { dir, file } = setup(validBrief())
   const fetcher = async (url) => ({ ok: !url.includes('swift.org'), status: 404 })

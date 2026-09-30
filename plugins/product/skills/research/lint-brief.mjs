@@ -287,6 +287,10 @@ export function readProjectVersions(dir) {
     Object.assign(out, json.dependencies, json.devDependencies)
     if (json.engines?.node) out.node = json.engines.node
   }
+  // Sin manifiesto (repos de solo .mjs + markdown, como este): el unico "manifiesto" es el
+  // runtime, asi que un brief puede fijar node=NN y A3 tiene contra que comparar. Un
+  // package.json con engines.node manda sobre esto por llegar antes.
+  if (Object.keys(out).length === 0) out.node = process.versions.node
   return out
 }
 
