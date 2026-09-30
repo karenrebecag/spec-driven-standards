@@ -1,9 +1,9 @@
 {
   "name": "product",
   "version": "0.1.0",
-  "description": "Discovery y especificación spec-driven a medida: /discover (problema, hipótesis, métrica) y /spec (requisitos trazables). Sin imports de terceros.",
+  "description": "Discovery, investigación y especificación spec-driven a medida: /discover (problema, hipótesis, métrica), /research (estándar técnico citado antes de la spec) y /spec (requisitos trazables). Sin imports de terceros.",
   "author": { "name": "Karen Rebeca Ortiz" },
   "license": "MIT",
-  "keywords": ["discovery", "spec", "product", "requisitos"],
+  "keywords": ["discovery", "spec", "product", "requisitos", "research"],
   "skills": ["./skills/"]
 }
