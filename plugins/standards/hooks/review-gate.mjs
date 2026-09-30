@@ -16,7 +16,7 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const REVIEWERS = ['code-reviewer', 'security-reviewer', 'qa-reviewer']
@@ -94,9 +94,14 @@ function changedFiles(cwd) {
   return [...tracked, ...untracked].filter(Boolean)
 }
 
+// En un worktree, --git-dir es absoluto: join() lo pegaba a cwd y el estado acababa dentro del
+// arbol de trabajo, cambiando el hash del diff que acababa de registrar.
+export function resolveStatePath(cwd, gitDir) {
+  return join(resolve(cwd, gitDir), 'claude-review.json')
+}
+
 function statePath(cwd) {
-  const gitDir = git(cwd, ['rev-parse', '--git-dir']).trim()
-  return join(cwd, gitDir, 'claude-review.json')
+  return resolveStatePath(cwd, git(cwd, ['rev-parse', '--git-dir']).trim())
 }
 
 function readState(cwd) {
