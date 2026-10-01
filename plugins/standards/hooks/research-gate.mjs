@@ -39,6 +39,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { lintBrief, readProjectVersions } from '../../product/skills/research/lint-brief.mjs'
+import { finishWork, workOf } from './work-repo.mjs'
 
 export const OMIT_MAX_LINES = 20
 
@@ -84,7 +85,7 @@ const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
 const basename = (path) => path.split(/[\\/]/).pop()
 const isCode = (path) => CODE_EXT.test(path) || CODE_NAMES.test(basename(path))
-const isDepFile = (path) => DEP_FILES.has(basename(path)) || DEP_NAMES.test(basename(path))
+export const isDepFile = (path) => DEP_FILES.has(basename(path)) || DEP_NAMES.test(basename(path))
 const toPosix = (p) => p.split(sep).join('/')
 
 // true si escribir en absPath cae bajo el gate.
@@ -96,7 +97,7 @@ export function isGatedPath(absPath, repoRoot, home) {
 }
 
 // true si absPath es un brief (no el INDEX), relativo a la raiz del repo.
-function isBriefPath(absPath, repoRoot) {
+export function isBriefPath(absPath, repoRoot) {
   const rel = toPosix(relative(repoRoot, absPath))
   return rel.startsWith(RESEARCH_DIR) && rel.endsWith('.md') && !rel.endsWith('/INDEX.md')
 }
@@ -104,7 +105,7 @@ function isBriefPath(absPath, repoRoot) {
 // El Estado declarado del header: MISMA regex que usa briefVerdict, asi lo que se detecta aqui es
 // exactamente lo que el gate honra como APROBADO. Un formato no canonico (minusculas, **negrita**)
 // no lo lee ninguno de los dos, asi que no habilita y no hay que vigilarlo.
-function estadoOf(md) {
+export function estadoOf(md) {
   return (String(md).match(/Estado:\s*([A-Z]+)/) || [])[1] || ''
 }
 
@@ -378,30 +379,65 @@ function branchBriefs(root, changed) {
     })
 }
 
-// SubagentStop de research-verifier: persiste su veredicto atado al sha256 del brief de la rama.
-// Si no hay exactamente un brief cambiado, se persiste sin binding util (briefHash=''), de modo que
-// un AUTO no quede auto-satisfecho a ciegas; Karen siempre puede aprobar con APROBADO.
+// El brief que el verificador leyo, si esta dentro de `root`; si no, null y rige la regla de la rama.
+function readBriefIn(root, briefPath) {
+  if (!briefPath) return null
+  try {
+    const real = realpathSync(briefPath)
+    return real.startsWith(root + sep) ? real : null
+  } catch {
+    return null
+  }
+}
+
+// SubagentStop de research-verifier: persiste su veredicto en el repo donde trabajo (su log de
+// work-repo) atado al sha256 del brief que leyo. Sin log, o con cero o varios briefs leidos, rige la
+// regla de antes: exactamente un brief cambiado en la rama; si no, briefHash='' y el AUTO no habilita
+// a ciegas. Karen siempre puede aprobar con APROBADO.
 function runSubagentStop(input) {
   if (input.agent_type !== 'research-verifier') return
-  const cwd = input.cwd || process.cwd()
   const v = parseResearchVerdict(input.last_assistant_message)
   if (!v) return // sin linea de veredicto no hay nada firmado que registrar
+  const work = workOf(input)
+  finishWork(input)
   let root
   try {
-    root = realpathSync(git(cwd, ['rev-parse', '--show-toplevel']).trim())
+    root = work.repo || realpathSync(git(input.cwd || process.cwd(), ['rev-parse', '--show-toplevel']).trim())
   } catch {
     return // fuera de un repo git
   }
   let briefHash = ''
   try {
-    const briefs = changedBriefPaths(root)
-    if (briefs.length === 1) briefHash = briefHashOf(readFileSync(join(root, briefs[0]), 'utf8'))
+    const read = readBriefIn(root, work.brief)
+    if (read) {
+      briefHash = briefHashOf(readFileSync(read, 'utf8'))
+    } else {
+      const briefs = changedBriefPaths(root)
+      if (briefs.length === 1) briefHash = briefHashOf(readFileSync(join(root, briefs[0]), 'utf8'))
+    }
   } catch {
     briefHash = ''
   }
   const state = readState(root)
   state['research-verifier'] = { verdict: v.verdict, unverified: v.unverified, contradictions: v.contradictions, briefHash, ts: Date.now() }
   writeState(root, state)
+}
+
+// Estado de la rama que decide el gate: lineas de codigo cambiadas contra su base (+ no trackeadas),
+// si toca dependencias y los briefs que agrega o modifica. `budget` corta la lectura de no trackeados
+// en cuanto se sabe la respuesta; otro llamador puede pasar un tope mayor si compara antes/despues.
+export function branchContext(root, budget = OMIT_MAX_LINES) {
+  const base = branchBase(root)
+  // --no-renames: un renombre se cuenta como borrado + alta, asi una edicion grande no se esconde.
+  const rows = parseNumstatZ(git(root, ['diff', '--numstat', '-z', '--no-renames', base]))
+  const untracked = untrackedFiles(root)
+  const changed = [...rows.map((r) => r.file), ...untracked]
+  const committed = countNumstat(rows)
+  return {
+    changedLines: committed + untrackedLines(root, untracked, budget - committed),
+    depsTouched: touchesDependencies(changed),
+    briefs: branchBriefs(root, changed),
+  }
 }
 
 export function decide(input, home = realHome()) {
@@ -440,23 +476,16 @@ export function decide(input, home = realHome()) {
   }
   if (!isGatedPath(real, root, home)) return null
 
-  const base = branchBase(root)
-  // --no-renames: un renombre se cuenta como borrado + alta, asi una edicion grande no se esconde.
-  const rows = parseNumstatZ(git(root, ['diff', '--numstat', '-z', '--no-renames', base]))
-  const untracked = untrackedFiles(root)
-  const changed = [...rows.map((r) => r.file), ...untracked]
-  const committed = countNumstat(rows)
-
+  const ctx = branchContext(root)
   return evaluateEdit({
-    changedLines: committed + untrackedLines(root, untracked, OMIT_MAX_LINES - committed),
+    ...ctx,
     proposed: proposedLines(input.tool_name, ti),
-    depsTouched: touchesDependencies(changed) || isDepFile(real),
-    briefs: branchBriefs(root, changed),
+    depsTouched: ctx.depsTouched || isDepFile(real),
   })
 }
 
 // El exento de ~/.claude se compara contra rutas reales: el HOME tambien, por si es un symlink.
-function realHome() {
+export function realHome() {
   const home = process.env.HOME || homedir()
   try {
     return realpathSync(home)

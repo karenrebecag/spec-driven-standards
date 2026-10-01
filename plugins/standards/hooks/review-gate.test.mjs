@@ -168,3 +168,279 @@ for (const bad of ['null', '[]']) {
     }
   })
 }
+
+// ---- repo del trabajo, no de la sesion (brief gate-work-repo) ----
+// Escenario real: la sesion esta en A (limpio) y el reviewer trabaja en B (con codigo). Antes el
+// veredicto caia en A con el hash del diff vacio, y `git -C B commit` pasaba sin gate.
+
+import { execFileSync as xf, spawnSync as sp } from 'node:child_process'
+import { mkdtempSync as mkt, realpathSync as rp, writeFileSync as wf, readFileSync as rf, rmSync as rmf } from 'node:fs'
+import { tmpdir as tmpd } from 'node:os'
+import { join as pj } from 'node:path'
+import { fileURLToPath as f2p } from 'node:url'
+
+const RG = f2p(new URL('./review-gate.mjs', import.meta.url))
+const WR = f2p(new URL('./work-repo.mjs', import.meta.url))
+const APPROVE_MSG = 'revisado\nVERDICT: APPROVE critical=0 high=0'
+
+function twoRepos() {
+  const base = rp(mkt(pj(tmpd(), 'review-gate-cross-')))
+  const mk = (name, dirty) => {
+    const r = pj(base, name)
+    xf('mkdir', ['-p', r])
+    const g = (...a) => xf('git', a, { cwd: r, encoding: 'utf8' })
+    g('init', '-q', '-b', 'main')
+    g('config', 'user.email', 't@t')
+    g('config', 'user.name', 't')
+    wf(pj(r, 'a.ts'), 'export const a = 1\n')
+    g('add', '.')
+    g('commit', '-q', '-m', 'i')
+    if (dirty) wf(pj(r, 'a.ts'), 'export const a = 2\n')
+    return r
+  }
+  const tmp = pj(base, 'tmp')
+  xf('mkdir', ['-p', tmp])
+  return { base, a: mk('a', false), b: mk('b', true), tmp }
+}
+
+const env = (tmp) => ({ ...process.env, TMPDIR: tmp })
+const ids = { session_id: 's1', agent_id: 'ag1' }
+
+function logTool(tmp, cwd, tool_name, tool_input, extraEnv = {}) {
+  const r = sp(process.execPath, [WR, 'log'], {
+    input: JSON.stringify({ ...ids, cwd, tool_name, tool_input }),
+    encoding: 'utf8',
+    env: { ...env(tmp), ...extraEnv },
+  })
+  assert.equal(r.status, 0, r.stderr)
+}
+
+function reviewerStop(tmp, cwd, agent_type = 'code-reviewer', withIds = true) {
+  const r = sp(process.execPath, [RG, 'subagent-stop'], {
+    input: JSON.stringify({ ...(withIds ? ids : {}), agent_type, last_assistant_message: APPROVE_MSG, cwd }),
+    encoding: 'utf8',
+    env: env(tmp),
+  })
+  assert.equal(r.status, 0, r.stderr)
+}
+
+function preCommit(tmp, cwd, command) {
+  const r = sp(process.execPath, [RG, 'pre-commit'], {
+    input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd }),
+    encoding: 'utf8',
+    env: env(tmp),
+  })
+  assert.equal(r.status, 0, r.stderr)
+  return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null
+}
+
+const stateOf = (repo) => {
+  try {
+    return JSON.parse(rf(pj(repo, '.git', 'claude-review.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+test('subagent-stop: un reviewer que trabajo solo en B registra en B aunque la sesion este en A', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    logTool(tmp, a, 'Bash', { command: `git -C ${b} diff` })
+    logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+    reviewerStop(tmp, a)
+    assert.equal(stateOf(a), null)
+    assert.equal(stateOf(b)['code-reviewer'].verdict, 'APPROVE')
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: leer reglas bajo ~/.claude no convierte el trabajo en multi-repo', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    logTool(tmp, a, 'Read', { file_path: pj(process.env.HOME, '.claude', 'rules', 'x.md') })
+    logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+    reviewerStop(tmp, a)
+    assert.equal(stateOf(b)['code-reviewer'].verdict, 'APPROVE')
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: evidencia de dos repos vuelve al cwd (K3)', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    logTool(tmp, a, 'Read', { file_path: pj(a, 'a.ts') })
+    logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+    reviewerStop(tmp, a)
+    assert.equal(stateOf(a)['code-reviewer'].verdict, 'APPROVE')
+    assert.equal(stateOf(b), null)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: sin log (hilo principal o sin agent_id) registra en el cwd, como antes', () => {
+  const { base, b, tmp } = twoRepos()
+  try {
+    reviewerStop(tmp, b, 'code-reviewer', false)
+    assert.equal(stateOf(b)['code-reviewer'].verdict, 'APPROVE')
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: el log del agente se borra al terminar', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+    reviewerStop(tmp, a)
+    assert.throws(() => rf(pj(tmp, 'claude-gates', 's1', 'ag1.jsonl')))
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: git -C B commit sin APPROVE se niega aunque el cwd A este limpio', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    const out = preCommit(tmp, a, `git -C ${b} commit -am x`)
+    assert.equal(out.permissionDecision, 'deny')
+    assert.match(out.permissionDecisionReason, /Falta revision de: code-reviewer/)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: cd B && git commit sin APPROVE se niega', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    const out = preCommit(tmp, a, `cd ${b} && git commit -am x`)
+    assert.equal(out.permissionDecision, 'deny')
+    assert.match(out.permissionDecisionReason, /Falta revision de: code-reviewer/)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: con los tres APPROVE registrados en B, git -C B commit pasa', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    for (const rev of ['code-reviewer', 'security-reviewer', 'qa-reviewer']) {
+      logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+      reviewerStop(tmp, a, rev)
+    }
+    assert.equal(preCommit(tmp, a, `git -C ${b} commit -am x`), null)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: un repo que no se puede resolver se niega con el motivo', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    const out = preCommit(tmp, a, `git --git-dir=${b}/.git commit -am x`)
+    assert.equal(out.permissionDecision, 'deny')
+    assert.match(out.permissionDecisionReason, /no se puede determinar|resolver/i)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: texto que menciona git commit sin serlo no dispara el gate', () => {
+  const { base, b, tmp } = twoRepos()
+  try {
+    assert.equal(preCommit(tmp, b, 'echo "git commit"'), null)
+    assert.equal(preCommit(tmp, b, 'git log --grep commit'), null)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: evidencia de B mas una ruta fuera de git registra en B', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    wf(pj(base, 'notas.txt'), 'x\n')
+    logTool(tmp, a, 'Read', { file_path: pj(base, 'notas.txt') })
+    logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+    reviewerStop(tmp, a)
+    assert.equal(stateOf(a), null)
+    assert.equal(stateOf(b)['code-reviewer'].verdict, 'APPROVE')
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: evidencia solo fuera de git vuelve al cwd', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    wf(pj(base, 'notas.txt'), 'x\n')
+    logTool(tmp, a, 'Read', { file_path: pj(base, 'notas.txt') })
+    reviewerStop(tmp, a)
+    assert.equal(stateOf(a)['code-reviewer'].verdict, 'APPROVE')
+    assert.equal(stateOf(b), null)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: ~/.claude que es symlink a un repo no cuenta como evidencia de ese repo', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    const home = pj(base, 'home')
+    xf('mkdir', ['-p', home])
+    xf('ln', ['-s', a, pj(home, '.claude')])
+    logTool(tmp, a, 'Read', { file_path: pj(home, '.claude', 'a.ts') }, { HOME: home })
+    logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') }, { HOME: home })
+    reviewerStop(tmp, a)
+    assert.equal(stateOf(a), null)
+    assert.equal(stateOf(b)['code-reviewer'].verdict, 'APPROVE')
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('subagent-stop: un log ilegible vuelve al cwd sin romper el hook', () => {
+  const { base, a, b, tmp } = twoRepos()
+  const log = pj(tmp, 'claude-gates', 's1', 'ag1.jsonl')
+  try {
+    logTool(tmp, b, 'Read', { file_path: pj(a, 'a.ts') })
+    xf('chmod', ['000', log])
+    reviewerStop(tmp, b)
+    assert.equal(stateOf(a), null)
+    assert.equal(stateOf(b)['code-reviewer'].verdict, 'APPROVE')
+  } finally {
+    try {
+      xf('chmod', ['600', log])
+    } catch {
+      // el hook ya pudo borrarlo
+    }
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: commits a dos repos en un mismo comando se niegan con el motivo', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    const out = preCommit(tmp, a, `git -C ${a} commit -m x && git -C ${b} commit -m y`)
+    assert.equal(out.permissionDecision, 'deny')
+    assert.match(out.permissionDecisionReason, /repos distintos/)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})
+
+test('pre-commit: con APPROVE registrado en la raiz de B, un commit desde un subdirectorio de B pasa', () => {
+  const { base, a, b, tmp } = twoRepos()
+  try {
+    xf('mkdir', ['-p', pj(b, 'sub')])
+    wf(pj(b, 'sub', 'nuevo.ts'), 'export const n = 1\n')
+    for (const rev of ['code-reviewer', 'security-reviewer', 'qa-reviewer']) {
+      logTool(tmp, a, 'Read', { file_path: pj(b, 'a.ts') })
+      reviewerStop(tmp, a, rev)
+    }
+    assert.equal(preCommit(tmp, a, `cd ${pj(b, 'sub')} && git commit -am x`), null)
+  } finally {
+    rmf(base, { recursive: true, force: true })
+  }
+})

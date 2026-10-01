@@ -499,7 +499,7 @@ test('CLI: en un worktree el gate cuenta la rama del worktree', () => {
 
 // ---- subagent-stop: el camino de produccion que firma el AUTO ----
 
-test('subagent-stop: research-verifier persiste AUTO atado al hash del unico brief y habilita', () => {
+test('subagent-stop (fallback sin log): persiste AUTO atado al hash del unico brief cambiado y habilita', () => {
   const repo = makeRepo()
   writeBrief(repo)
   sign(repo)
@@ -517,7 +517,7 @@ test('subagent-stop: un agent_type que no es research-verifier no firma nada', (
   assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'deny')
 })
 
-test('subagent-stop: 0 o 2+ briefs cambiados persisten briefHash vacio y no habilitan AUTO', () => {
+test('subagent-stop (fallback sin log): 0 o 2+ briefs cambiados persisten briefHash vacio y no habilitan AUTO', () => {
   const none = makeRepo()
   sign(none)
   assert.equal(readStateFile(none)['research-verifier'].briefHash, '')
@@ -529,6 +529,86 @@ test('subagent-stop: 0 o 2+ briefs cambiados persisten briefHash vacio y no habi
   sign(two)
   assert.equal(readStateFile(two)['research-verifier'].briefHash, '')
   assert.equal(run(two, 'Write', { file_path: join(two, 'src/c.ts'), content: lines(40) }), 'deny')
+})
+
+// ---- subagent-stop con log: el repo y el brief salen de lo que el verificador leyo (gate-work-repo) ----
+
+const WORK = join(dirname(fileURLToPath(import.meta.url)), 'work-repo.mjs')
+const IDS = { session_id: 's1', agent_id: 'v1' }
+
+function logRead(logTmp, cwd, file_path) {
+  const r = spawnSync('node', [WORK, 'log'], {
+    input: JSON.stringify({ ...IDS, cwd, tool_name: 'Read', tool_input: { file_path } }),
+    encoding: 'utf8',
+    env: { ...process.env, TMPDIR: logTmp },
+  })
+  assert.equal(r.status, 0, r.stderr)
+}
+
+function signWithLog(logTmp, cwd) {
+  const r = spawnSync('node', [HOOK, 'subagent-stop'], {
+    input: JSON.stringify({ ...IDS, agent_type: 'research-verifier', last_assistant_message: `ok\n${AUTO_LINE}`, cwd }),
+    encoding: 'utf8',
+    env: { ...process.env, TMPDIR: logTmp },
+  })
+  assert.equal(r.status, 0, r.stderr)
+}
+
+test('subagent-stop con log: el verificador que leyo un brief de B registra en B aunque la sesion este en A', () => {
+  const a = makeRepo()
+  const b = makeRepo()
+  const logTmp = tmp('research-gate-log-')
+  writeBrief(b)
+  logRead(logTmp, a, join(b, 'docs/research/demo.md'))
+  signWithLog(logTmp, a)
+  assert.equal(readStateFile(a), null)
+  const st = readStateFile(b)['research-verifier']
+  assert.equal(st.briefHash, briefHashOf(readFileSync(join(b, 'docs/research/demo.md'), 'utf8')))
+  assert.equal(run(b, 'Write', { file_path: join(b, 'src/c.ts'), content: lines(40) }), 'allow')
+})
+
+test('subagent-stop con log: un brief leido con dos cambiados en la rama se ata al leido', () => {
+  const b = makeRepo()
+  const logTmp = tmp('research-gate-log-')
+  mkdirSync(join(b, 'docs/research'), { recursive: true })
+  writeFileSync(join(b, 'docs/research/demo.md'), brief(AUTO))
+  writeFileSync(join(b, 'docs/research/otro.md'), brief({ ...AUTO, versiones: 'y=2' }))
+  logRead(logTmp, b, join(b, 'docs/research/otro.md'))
+  signWithLog(logTmp, b)
+  assert.equal(
+    readStateFile(b)['research-verifier'].briefHash,
+    briefHashOf(readFileSync(join(b, 'docs/research/otro.md'), 'utf8')),
+  )
+})
+
+test('subagent-stop con log: dos briefs leidos vuelven a la regla de un solo brief cambiado', () => {
+  const b = makeRepo()
+  const logTmp = tmp('research-gate-log-')
+  mkdirSync(join(b, 'docs/research'), { recursive: true })
+  writeFileSync(join(b, 'docs/research/demo.md'), brief(AUTO))
+  writeFileSync(join(b, 'docs/research/otro.md'), brief(AUTO))
+  logRead(logTmp, b, join(b, 'docs/research/demo.md'))
+  logRead(logTmp, b, join(b, 'docs/research/otro.md'))
+  signWithLog(logTmp, b)
+  assert.equal(readStateFile(b)['research-verifier'].briefHash, '')
+})
+
+test('subagent-stop con log: un brief leido en otro repo no se firma en el repo que resolvio el cwd', () => {
+  const a = makeRepo()
+  const b = makeRepo()
+  const logTmp = tmp('research-gate-log-')
+  writeBrief(a)
+  mkdirSync(join(b, 'docs/research'), { recursive: true })
+  writeFileSync(join(b, 'docs/research/demo.md'), brief({ ...AUTO, versiones: 'y=2' }))
+  // leer en A y en B: dos repos, vuelve al cwd (A); el brief leido es de B y no puede firmar A
+  logRead(logTmp, a, join(a, 'src/a.ts'))
+  logRead(logTmp, a, join(b, 'docs/research/demo.md'))
+  signWithLog(logTmp, a)
+  assert.equal(readStateFile(b), null)
+  assert.equal(
+    readStateFile(a)['research-verifier'].briefHash,
+    briefHashOf(readFileSync(join(a, 'docs/research/demo.md'), 'utf8')),
+  )
 })
 
 test('subagent-stop: sin linea de veredicto no persiste; ESCALATE persiste pero no habilita', () => {

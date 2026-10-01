@@ -135,11 +135,21 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/work-repo.mjs log",
+            "timeout": 15
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit:*)",
+            "if": "Bash(git *)",
             "command": "node $HOME/.claude/hooks/review-gate.mjs pre-commit",
             "timeout": 15
           },
