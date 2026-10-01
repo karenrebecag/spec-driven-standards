@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { isDeployCommand, evaluateRelease, reportChecker, parseReleaseVerdict, resolveStatePath } from './release-gate.mjs'
+import { isDeployCommand, evaluateRelease, reportChecker, parseReleaseVerdict, resolveStatePath, dirtyPaths } from './release-gate.mjs'
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), 'release-gate.mjs')
 
@@ -111,6 +111,16 @@ const dossier = (extra = {}) => ({
 
 test('evaluateRelease allows a complete dossier for the current SHA', () => {
   assert.equal(evaluateRelease(dossier(), SHA, NOW).allow, true)
+})
+
+test('evaluateRelease blocks a dirty working tree (deploy would ship uncommitted code)', () => {
+  const r = evaluateRelease(dossier(), SHA, NOW, { treeDirty: true })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /arbol|sin commitear|no revisad/i)
+})
+
+test('evaluateRelease allows a clean tree (treeDirty false is the default)', () => {
+  assert.equal(evaluateRelease(dossier(), SHA, NOW, { treeDirty: false }).allow, true)
 })
 
 test('evaluateRelease blocks when no dossier exists', () => {
@@ -512,6 +522,104 @@ test('the deploy gate denies an exposed release that was never signed', () => {
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /release-verifier/i)
 })
 
+test('the deploy gate denies a dirty working tree even with a complete signed dossier', () => {
+  const repo = makeRepo()
+  const dossier = {
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen',
+  }
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify(dossier))
+  // Un archivo trackeado modificado tras el commit: el deploy subiria eso, no HEAD.
+  writeFileSync(join(repo.dir, 'tests/a.test.mjs'), '// a modificado sin commitear\n')
+  const deploy = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: repo.dir }),
+    encoding: 'utf8',
+  })
+  const out = JSON.parse(deploy.stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /arbol|sin commitear/i)
+})
+
+test('the deploy gate allows when only the untracked dossier is present (clean otherwise)', () => {
+  const repo = makeRepo()
+  const dossier = {
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen',
+  }
+  // El dossier vive sin trackear a proposito: no cuenta como arbol sucio.
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify(dossier))
+  const deploy = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: repo.dir }),
+    encoding: 'utf8',
+  })
+  assert.equal(deploy.stdout.trim(), '', `deberia permitir; stdout: ${deploy.stdout}`)
+})
+
+// El valor del check esta en atrapar lo que vercel SUBIRIA y el commit nunca vio: un archivo nuevo
+// sin trackear, y cambios solo en el index. Si una regresion abriera esos caminos, estos fallarian.
+function signedCleanRepo() {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen',
+  }))
+  return repo
+}
+const deployHook = (dir) =>
+  spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: dir }), encoding: 'utf8' })
+
+test('the deploy gate denies an untracked file that is not the dossier (vercel would upload it)', () => {
+  const repo = signedCleanRepo()
+  writeFileSync(join(repo.dir, 'src-new.mjs'), 'export const x = 1\n')
+  const out = JSON.parse(deployHook(repo.dir).stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /arbol|sin commitear/i)
+})
+
+test('the deploy gate denies changes that are staged but not committed', () => {
+  const repo = signedCleanRepo()
+  writeFileSync(join(repo.dir, 'tests/a.test.mjs'), '// staged, sin commit\n')
+  repo.g('add', 'tests/a.test.mjs')
+  const out = JSON.parse(deployHook(repo.dir).stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /arbol|sin commitear/i)
+})
+
+test('the deploy gate exemption is the exact root dossier path, not a lookalike', () => {
+  const repo = signedCleanRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json.bak'), 'x')
+  const out = JSON.parse(deployHook(repo.dir).stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /arbol|sin commitear/i)
+})
+
+test('the deploy gate denies an uncommitted rename', () => {
+  const repo = signedCleanRepo()
+  repo.g('mv', 'tests/a.test.mjs', 'tests/a-renamed.test.mjs')
+  const out = JSON.parse(deployHook(repo.dir).stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /arbol|sin commitear/i)
+})
+
+// Regresion del parseo -z: un rename de un archivo de nombre corto HACIA la ruta del dossier no
+// debe quedar oculto. La ruta vieja va como entrada aparte sin prefijo XY; el parser con estado la
+// consume y cuenta la nueva (tracked rename, no un `??` untracked) como suciedad.
+test('dirtyPaths sees a rename onto the dossier path (short old name) as dirty', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'release-rename-'))
+  const g = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+  g('init', '-q')
+  g('config', 'user.email', 't@t.t')
+  g('config', 'user.name', 't')
+  g('config', 'commit.gpgsign', 'false')
+  writeFileSync(join(dir, 'a'), 'x\n')
+  g('add', '-A')
+  g('commit', '-qm', 'seed')
+  g('mv', 'a', '.release-approval.json')
+  const dirty = dirtyPaths(dir)
+  assert.ok(dirty.length > 0, 'un rename hacia el dossier no debe quedar oculto')
+  assert.ok(dirty.includes('.release-approval.json'))
+})
+
 test('resolveStatePath keeps an absolute git-dir out of the working tree', () => {
   const abs = resolveStatePath('/proj', '/var/repo/.git')
   assert.equal(abs, '/var/repo/.git/claude-review.json')
@@ -567,10 +675,25 @@ test('the hook entrypoint denies an exposed release whose reports are missing, w
 })
 
 test('the hook entrypoint allows a non-exposed release without consulting the verifier', () => {
-  // Sin superficie expuesta, el gate no exige reportes ni veredicto del release-verifier.
-  const r = runHook(e2eDossier({ superficie_expuesta: false }))
+  // Sin superficie expuesta, el gate no exige reportes ni veredicto; pero si necesita un HEAD real.
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen', superficie_expuesta: false,
+  }))
+  const r = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: repo.dir }),
+    encoding: 'utf8',
+  })
   assert.equal(r.status, 0, `stderr: ${r.stderr}`)
   assert.equal(r.stdout.trim(), '', 'sin payload de deny: el deploy queda habilitado por el gate')
+})
+
+test('evaluateRelease blocks when HEAD is not a resolvable 8-hex sha (empty), even if the dossier matches', () => {
+  // Un dossier forjado con sha:'' no debe satisfacer la comprobacion cuando no hay HEAD resoluble.
+  const r = evaluateRelease(dossier({ sha: '' }), '', NOW)
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /SHA|commit/i)
 })
 
 test('the hook entrypoint ignores a non-deploy command', () => {

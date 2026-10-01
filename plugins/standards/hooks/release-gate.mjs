@@ -74,12 +74,17 @@ export function parseReleaseVerdict(text) {
 // `reportExists` es inyectable para mantener la funcion pura y testeable; el entrypoint pasa un
 // verificador real contra el disco. `verifierState` es la entrada `release-verifier` persistida y
 // `currentReportHash` el sha256 del reporte vigente; ambos solo se consultan con superficie expuesta.
-export function evaluateRelease(dossier, sha, nowMs, { reportExists = isReportFile, verifierState, currentReportHash } = {}) {
+export function evaluateRelease(dossier, sha, nowMs, { reportExists = isReportFile, verifierState, currentReportHash, treeDirty = false } = {}) {
   if (!dossier || typeof dossier !== 'object') {
     return { allow: false, reason: 'Despliegue bloqueado: no hay .release-approval.json. Corre /release para producir el dossier (CI, aprobaciones, rollback, migraciones, owner).' }
   }
   const faltan = []
-  if (dossier.sha !== sha) faltan.push(`el dossier es de otro commit (SHA), esta desactualizado (dossier=${dossier.sha || '?'}, HEAD=${sha})`)
+  // `vercel --prod` sube el arbol de trabajo, no HEAD: un arbol sucio desplegaria codigo que no
+  // paso por el commit ni por la revision. El dossier, sin trackear, no cuenta (lo exenta dirtyPaths).
+  if (treeDirty) faltan.push('el arbol de trabajo tiene cambios sin commitear: el deploy subiria codigo no revisado (commitea o descarta antes de desplegar)')
+  // El SHA debe ser un HEAD resoluble (8 hex) e igual al del dossier. Exigir el formato cierra el
+  // caso de un HEAD no resoluble (sha=''): un dossier forjado con "sha":"" ya no casaria con ''.
+  if (!/^[0-9a-f]{8}$/.test(sha) || dossier.sha !== sha) faltan.push(`el dossier no ata a un commit valido para este SHA (dossier=${dossier.sha || '?'}, HEAD=${sha || 'desconocido'})`)
   if (dossier.ci_green !== true) faltan.push('CI no esta en verde para este SHA')
   for (const a of APPROVALS) {
     if (!dossier.approvals || dossier.approvals[a] !== true) faltan.push(`falta aprobacion de ${a}`)
@@ -138,14 +143,23 @@ function gitRaw(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
 }
 
-// Rutas con cambios en el arbol, sin el dossier (vive sin trackear a proposito). Formato -z:
-// cada entrada es `XY <ruta>` terminada en NUL; un rename anade la ruta vieja como entrada aparte.
-function dirtyPaths(cwd) {
-  return gitRaw(cwd, ['status', '--porcelain', '-z'])
-    .split('\0')
-    .map((e) => e.slice(3))
-    .filter(Boolean)
-    .filter((p) => p !== '.release-approval.json')
+// Rutas con cambios en el arbol. Formato -z: cada entrada es `XY <ruta>` terminada en NUL; un
+// rename/copy (R/C en el estado) anade la ruta VIEJA como la siguiente entrada, SIN el prefijo XY,
+// asi que hay que consumirla con estado y no aplicarle slice(3). El dossier se exenta SOLO como
+// untracked exacto (`?? .release-approval.json`): un rename o borrado que lo toque si es suciedad.
+export function dirtyPaths(cwd) {
+  const parts = gitRaw(cwd, ['status', '--porcelain', '-z']).split('\0')
+  const dirty = []
+  for (let i = 0; i < parts.length; i++) {
+    const e = parts[i]
+    if (!e) continue
+    const xy = e.slice(0, 2)
+    const path = e.slice(3)
+    if (xy[0] === 'R' || xy[0] === 'C') i++ // la ruta vieja es la entrada siguiente: consumirla
+    if (xy === '??' && path === '.release-approval.json') continue
+    dirty.push(path)
+  }
+  return dirty
 }
 
 function readDossier(cwd) {
@@ -298,15 +312,23 @@ function runPreDeploy(input) {
   const command = input.tool_input && input.tool_input.command
   if (!isDeployCommand(command)) process.exit(0)
 
+  // HACK: el gate inspecciona input.cwd, no el directorio que vercel despliega. Un
+  // `cd otro && vercel --prod` o `vercel --prod --cwd <dir>` evaluaria un arbol distinto al
+  // desplegado. Techo aceptado. Disparador de mejora: extraer `--cwd`/`cd` del comando y evaluar
+  // ESE arbol cuando el abuso aparezca.
   const cwd = input.cwd || process.cwd()
 
   let result
   try {
     let sha
+    let treeDirty = false
     try {
       sha = git(cwd, ['rev-parse', 'HEAD']).slice(0, 8)
+      treeDirty = dirtyPaths(cwd).length > 0
     } catch {
       sha = ''
+      // sin repo git el SHA queda '' y evaluateRelease deniega (no es un HEAD resoluble de 8 hex);
+      // la suciedad no se evalua pero el deploy ya esta bloqueado por el SHA.
     }
     const dossier = readDossier(cwd)
     let verifierState
@@ -327,7 +349,7 @@ function runPreDeploy(input) {
         }
       }
     }
-    result = evaluateRelease(dossier, sha, Date.now(), { reportExists: reportChecker(cwd), verifierState, currentReportHash })
+    result = evaluateRelease(dossier, sha, Date.now(), { reportExists: reportChecker(cwd), verifierState, currentReportHash, treeDirty })
   } catch (err) {
     // Un gate de deploy falla CERRADO: ante un error inesperado, deniega con el motivo en vez de
     // dejar pasar el despliegue (un exit distinto de la denegacion no bloquearia la tool).
