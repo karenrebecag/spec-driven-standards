@@ -42,6 +42,36 @@ function makeRepo({ reportBody = DEFAULT_REPORT, reportPath = 'reports/pentest.m
   return { dir, sha, reportHash, g }
 }
 
+// Repo con una rama de feature: la base (main) NO trae los tests de regresion; la rama los anade.
+// Asi branchBase(HEAD) es el commit base y el diff de la rama contiene los tests (atadura por diff).
+function makeBranchRepo({ reportBody = DEFAULT_REPORT, baseFiles = {} } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'release-branch-'))
+  const g = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+  g('init', '-q', '-b', 'main')
+  g('config', 'user.email', 't@t.t')
+  g('config', 'user.name', 't')
+  g('config', 'commit.gpgsign', 'false')
+  mkdirSync(join(dir, 'src'), { recursive: true })
+  writeFileSync(join(dir, 'src/x.mjs'), '// base\n')
+  for (const [p, body] of Object.entries(baseFiles)) {
+    mkdirSync(dirname(join(dir, p)), { recursive: true })
+    writeFileSync(join(dir, p), body)
+  }
+  g('add', '-A')
+  g('commit', '-qm', 'base')
+  g('checkout', '-q', '-b', 'work')
+  mkdirSync(join(dir, 'tests'), { recursive: true })
+  mkdirSync(join(dir, 'reports'), { recursive: true })
+  writeFileSync(join(dir, 'tests/a.test.mjs'), '// a\n')
+  writeFileSync(join(dir, 'tests/b.test.mjs'), '// b\n')
+  writeFileSync(join(dir, 'reports/pentest.md'), reportBody)
+  writeFileSync(join(dir, 'reports/qa.md'), '# qa\nok')
+  g('add', '-A')
+  g('commit', '-qm', 'fix + tests de regresion')
+  const sha = g('rev-parse', 'HEAD').trim().slice(0, 8)
+  return { dir, g, sha }
+}
+
 // Invoca el hook en modo subagent-stop (SubagentStop) con un payload por stdin.
 function runSubagentStop(dir, { agent_type = 'release-verifier', last_assistant_message = '', stop_hook_active = false } = {}) {
   return spawnSync(process.execPath, [HOOK, 'subagent-stop'], {
@@ -360,6 +390,81 @@ test('subagent-stop refuses to sign over a dirty tree', () => {
   const out = JSON.parse(r.stdout)
   assert.equal(out.decision, 'block')
   assert.match(out.reason, /suci|limpio|dirty/i)
+})
+
+// Atadura por diff (D2, sign-time sobre la rama): un CLOSED solo persiste si cada test de
+// regresion aparece en el diff de la rama; un test que no es parte de este cambio lo rechaza.
+test('subagent-stop persists a CLOSED whose regression tests are in the branch diff', () => {
+  const repo = makeBranchRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(readReviewState(repo.dir)['release-verifier'].tests, ['tests/a.test.mjs', 'tests/b.test.mjs'])
+})
+
+test('subagent-stop rejects a CLOSED whose regression test is not in the branch diff', () => {
+  // El reporte nombra un test que ya existia en la base (no lo introduce este cambio): no esta en
+  // el diff de la rama, asi que no puede sostener un cierre de este release.
+  const body = `# pentest
+Regresion: tests/a.test.mjs::nuevo
+Regresion: src/preexistente.test.mjs::viejo
+`
+  const repo = makeBranchRepo({ reportBody: body, baseFiles: { 'src/preexistente.test.mjs': '// ya existia en la base\n' } })
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, findings: 2, closed: 2 }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /src\/preexistente\.test\.mjs/, 'nombra el archivo infractor')
+  assert.doesNotMatch(out.reason, /tests\/a\.test\.mjs/, 'no culpa al test que si esta en el diff')
+  assert.throws(() => readReviewState(repo.dir))
+})
+
+test('subagent-stop accepts a Regresion path written with ./ or // (normalized before diff match)', () => {
+  const body = `# pentest
+Regresion: ./tests/a.test.mjs::x
+Regresion: tests//b.test.mjs::y
+`
+  const repo = makeBranchRepo({ reportBody: body })
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(readReviewState(repo.dir)['release-verifier'].tests, ['tests/a.test.mjs', 'tests/b.test.mjs'])
+})
+
+test('subagent-stop accepts a pre-existing test that the branch MODIFIES (introduce o toca)', () => {
+  // El test existia en la base pero la rama lo toca: aparece en el diff, asi que sostiene el cierre.
+  const body = `# pentest
+Regresion: tests/touched.test.mjs::x
+`
+  const repo = makeBranchRepo({ reportBody: body, baseFiles: { 'tests/touched.test.mjs': '// v1\n' } })
+  writeFileSync(join(repo.dir, 'tests/touched.test.mjs'), '// v2 modificado en la rama\n')
+  repo.g('add', '-A')
+  repo.g('commit', '-qm', 'toca el test existente')
+  const sha = repo.g('rev-parse', 'HEAD').trim().slice(0, 8)
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha, findings: 1, closed: 1 }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(readReviewState(repo.dir)['release-verifier'].tests, ['tests/touched.test.mjs'])
+})
+
+test('subagent-stop omits the diff binding on main (HEAD === base) and still persists', () => {
+  // makeRepo firma en main de un solo commit: no hay rama, la atadura por diff se omite.
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(readReviewState(repo.dir)['release-verifier'].verdict, 'CLOSED')
+})
+
+test('subagent-stop omits the diff binding when there is no default branch ref (no silent nullify)', () => {
+  // Rama sin main/master/origin: branchBase(allowRoot:false) da null -> se omite (no se diffea
+  // contra el commit raiz, que anularia la atadura en silencio dejando pasar cualquier test).
+  const repo = makeBranchRepo()
+  repo.g('branch', '-D', 'main')
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(readReviewState(repo.dir)['release-verifier'].verdict, 'CLOSED')
 })
 
 test('subagent-stop ignores a non-release-verifier agent', () => {

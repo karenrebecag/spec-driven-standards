@@ -45,7 +45,11 @@ export function validateRegresionPath(root, p) {
 // La base del hallazgo: el merge-base con la rama por defecto. En el merge-base ningun fix de la
 // rama esta presente, asi que el test restaurado de HEAD debe ir rojo ahi. El formato del reporte
 // no nombra el commit de fix, por eso no se usa `fixsha^`.
-export function branchBase(cwd) {
+// `allowRoot` controla el fallback. En la reconstruccion de la base (verifyFinding) conviene caer
+// al commit raiz. Para la atadura por diff (release-gate) NO: diffear contra el raiz haria que el
+// diff sea todo el historial y la atadura se anularia en silencio, asi que alli se pasa false y un
+// repo sin rama por defecto devuelve null (el llamador omite la atadura, no la finge).
+export function branchBase(cwd, { allowRoot = true } = {}) {
   for (const ref of ['origin/HEAD', 'origin/main', 'origin/master', 'main', 'master']) {
     try {
       return git(cwd, ['merge-base', 'HEAD', ref])
@@ -53,6 +57,7 @@ export function branchBase(cwd) {
       // ref ausente: probar el siguiente
     }
   }
+  if (!allowRoot) return null
   try {
     return git(cwd, ['rev-list', '--max-parents=0', 'HEAD']).split('\n')[0]
   } catch {
