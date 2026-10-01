@@ -14,6 +14,14 @@ Tres decisiones grises, cada una con opciones y evidencia en contra:
 2. Quien ata el veredicto al SHA y al reporte: el HOOK (recomputa `HEAD8` y hashea el reporte) frente a un campo declarado en el archivo (el anti-patron de research-gate).
 3. Como distinguir mecanicamente una falla de ASERCION (el vuln se reprodujo, cuenta como fue-rojo) de una falla de CARGA/compilacion en la base (fixtures o imports que solo existen tras el fix, cuenta como `unverified`, nunca `closed`).
 
+## Reutilizacion
+
+- PR-1 (release-verifier + modo subagent-stop del gate): en main (PR #13).
+- **PR-2 (esta rama): Fase 2 — check de arbol limpio en pre-deploy.** Cubierto por la seccion
+  "Fase 2" de este brief (el agujero del working tree frente a HEAD). Sin investigacion nueva:
+  reusa `dirtyPaths` ya introducido en PR-1 y el inyectable puro de `evaluateRelease`. Versiones
+  sin cambios (node=22).
+
 ## 1b. Decisiones (Karen, 2026-09-30)
 
 El brief escalo; Karen resolvio. Estas decisiones cierran las grises y las NEEDS CLARIFICATION:
