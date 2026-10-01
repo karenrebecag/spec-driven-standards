@@ -131,3 +131,40 @@ test('worktree real: el estado cae fuera del arbol y no ensucia el diff', async 
     rmSync(base, { recursive: true, force: true })
   }
 })
+
+// La guarda de readState importa en subagent-stop: `state[agent] = ...` revienta si el estado no es
+// objeto (null, array). Se ejercita ese sitio exacto; sin la guarda, el primer caso tira TypeError.
+for (const bad of ['null', '[]']) {
+  test(`subagent-stop: un estado no-objeto (${bad}) no revienta y persiste el veredicto`, async () => {
+    const { execFileSync, spawnSync } = await import('node:child_process')
+    const { mkdtempSync, realpathSync, writeFileSync, readFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const HOOK = fileURLToPath(new URL('./review-gate.mjs', import.meta.url))
+    const repo = realpathSync(mkdtempSync(join(tmpdir(), 'review-gate-null-')))
+    const g = (...a) => execFileSync('git', a, { cwd: repo, encoding: 'utf8' })
+    try {
+      g('init', '-q', '-b', 'main')
+      g('config', 'user.email', 't@t')
+      g('config', 'user.name', 't')
+      writeFileSync(join(repo, 'a.ts'), 'export const a = 1\n')
+      g('add', '.')
+      g('commit', '-q', '-m', 'i')
+      writeFileSync(join(repo, '.git', 'claude-review.json'), bad) // estado no-objeto
+      const r = spawnSync(process.execPath, [HOOK, 'subagent-stop'], {
+        input: JSON.stringify({
+          agent_type: 'code-reviewer',
+          last_assistant_message: 'revisado\nVERDICT: APPROVE critical=0 high=0',
+          cwd: repo,
+        }),
+        encoding: 'utf8',
+      })
+      assert.equal(r.status, 0, r.stderr)
+      const state = JSON.parse(readFileSync(join(repo, '.git', 'claude-review.json'), 'utf8'))
+      assert.equal(state['code-reviewer'].verdict, 'APPROVE')
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+}

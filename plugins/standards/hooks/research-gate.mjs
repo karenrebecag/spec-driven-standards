@@ -33,7 +33,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync, renameSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -273,10 +273,16 @@ function readState(root) {
   }
 }
 
+// Escribe atomico: a un temporal y luego rename, asi otro gate nunca lee un JSON a medio escribir y
+// se queda sin las claves de los demas. HACK: dos writeState en paralelo pueden pisarse (gana el ultimo
+// rename, se pierde la clave del otro). Poner un lock de archivo si llega a haber gates concurrentes
+// de verdad; hoy cada hook es un proceso corto y solo.
 function writeState(root, state) {
   const p = statePath(root)
   mkdirSync(join(p, '..'), { recursive: true })
-  writeFileSync(p, JSON.stringify(state, null, 2))
+  const tmp = `${p}.${process.pid}.tmp`
+  writeFileSync(tmp, JSON.stringify(state, null, 2))
+  renameSync(tmp, p)
 }
 
 // El hash ata el CUERPO del brief, no las dos lineas que /research escribe DESPUES de que el
