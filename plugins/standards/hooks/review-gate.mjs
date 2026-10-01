@@ -12,12 +12,17 @@
 // Sin dependencias. Lee JSON del hook por stdin y responde por stdout el contrato de hooks.
 // HACK: el gate solo cubre commits que pasan por la tool Bash de Claude. Un `! git commit`
 // escrito en el prompt corre directo y no dispara PreToolUse — es la valvula manual de Karen.
+//
+// El repo es el del trabajo, no el de la sesion (work-repo.mjs): el veredicto va al repo donde el
+// reviewer trabajo segun su log, y el commit se evalua en el directorio efectivo del comando.
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync, realpathSync, renameSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { finishWork, isGitCommit, repoFromCommand, repoRoot, workOf } from './work-repo.mjs'
 
 const REVIEWERS = ['code-reviewer', 'security-reviewer', 'qa-reviewer']
 const CODE_EXT = /\.(m?[jt]sx?|py|go|rs|rb|php|java|kt|swift|c|cc|cpp|h|hpp|cs|scala|sh|sql|astro|vue|svelte)$/i
@@ -155,44 +160,62 @@ function runSubagentStop(input) {
     return
   }
 
+  // Repo donde trabajo el reviewer segun su log; sin evidencia unica, el de la sesion (K3).
+  const repo = workOf(input).repo || cwd
+  finishWork(input)
   let hash
   try {
-    hash = computeDiffHash(cwd)
+    hash = computeDiffHash(repo)
   } catch {
     return // sin repo git no hay nada que registrar
   }
-  const state = readState(cwd)
+  const state = readState(repo)
   state[agent] = { verdict: v.verdict, critical: v.critical, high: v.high, diffHash: hash, ts: Date.now() }
-  writeState(cwd, state)
+  writeState(repo, state)
 }
 
-function runPreCommit(input) {
-  const command = input.tool_input && input.tool_input.command
-  if (typeof command !== 'string' || !/\bgit\s+commit\b/.test(command)) return
-
-  const cwd = input.cwd || process.cwd()
-  let files
-  let hash
-  try {
-    files = changedFiles(cwd)
-    hash = computeDiffHash(cwd)
-  } catch {
-    return // no es un repo git: nada que exigir
-  }
-  if (!isCodeDiff(files)) return // solo docs/config: sin gate
-
-  const result = evaluateCommit(readState(cwd), hash)
-  if (result.allow) return
-
+function deny(reason) {
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
-        permissionDecisionReason: result.reason,
+        permissionDecisionReason: reason,
       },
     }),
   )
+}
+
+function runPreCommit(input) {
+  const command = input.tool_input && input.tool_input.command
+  if (typeof command !== 'string' || !isGitCommit(command)) return
+
+  // Antes un repo irresoluble era "no es repo, nada que exigir": `--git-dir`, `cd $X` o un subshell
+  // pasaban sin gate. Ahora el commit se niega con el motivo.
+  // A la raiz: el reviewer registra contra la raiz (workOf), y el hash desde un subdirectorio difiere.
+  const dir = repoFromCommand(command, input.cwd || process.cwd())
+  const repo = dir && (repoRoot(dir) || dir)
+  if (!repo) {
+    deny(
+      'Commit bloqueado: no se puede determinar en que repo corre este git commit ' +
+        '(--git-dir/--work-tree, GIT_DIR, variables, ~, subshell, varios cd o commits a repos distintos ' +
+        'en un mismo comando). Usa `git -C <ruta-absoluta> commit` o `cd <ruta-absoluta> && git commit`, ' +
+        'un repo por comando.',
+    )
+    return
+  }
+  let files
+  let hash
+  try {
+    files = changedFiles(repo)
+    hash = computeDiffHash(repo)
+  } catch {
+    return // no es un repo git: el propio git commit va a fallar
+  }
+  if (!isCodeDiff(files)) return // solo docs/config: sin gate
+
+  const result = evaluateCommit(readState(repo), hash)
+  if (!result.allow) deny(result.reason)
 }
 
 function main() {
