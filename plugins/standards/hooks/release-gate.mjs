@@ -17,7 +17,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, mkdirSync, realpathSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, renameSync, statSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -184,16 +184,25 @@ function statePath(cwd) {
 
 function readState(cwd) {
   try {
-    return JSON.parse(readFileSync(statePath(cwd), 'utf8'))
+    const s = JSON.parse(readFileSync(statePath(cwd), 'utf8'))
+    // Un JSON valido pero no-objeto (null, array) rompe al indexarlo por clave de agente; tratarlo
+    // como vacio falla cerrado (sin veredicto no hay aprobacion).
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : {}
   } catch {
     return {}
   }
 }
 
+// Escribe atomico: a un temporal y luego rename, asi otro gate nunca lee un JSON a medio escribir y
+// se queda sin las claves de los demas. HACK: dos writeState en paralelo pueden pisarse (gana el ultimo
+// rename, se pierde la clave del otro). Poner un lock de archivo si llega a haber gates concurrentes
+// de verdad; hoy cada hook es un proceso corto y solo.
 function writeState(cwd, state) {
   const p = statePath(cwd)
   mkdirSync(join(p, '..'), { recursive: true })
-  writeFileSync(p, JSON.stringify(state, null, 2))
+  const tmp = `${p}.${process.pid}.tmp`
+  writeFileSync(tmp, JSON.stringify(state, null, 2))
+  renameSync(tmp, p)
 }
 
 function sha256(buf) {

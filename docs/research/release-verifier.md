@@ -17,6 +17,13 @@ Tres decisiones grises, cada una con opciones y evidencia en contra:
 ## Reutilizacion
 
 - PR-1 (release-verifier + modo subagent-stop del gate): en main (PR #13).
+- **PR-B (esta rama): escritura atomica del estado compartido (cross-gate).** Decision de Karen
+  (2026-10-01). Los tres gates (review/release/research) comparten `.git/claude-review.json` con un
+  read-modify-write. `writeState` pasa a temp+rename (atomico en el mismo fs) para que nadie lea un
+  JSON a medio escribir y se quede sin las claves de otros gates; `readState` de review y release gana
+  la guarda de no-objeto que research ya tenia (PR #16). Reusa el patron de estado ya existente; sin
+  investigacion nueva (node=22). Residual: dos writes en paralelo aun pueden pisarse (lost-update);
+  necesitaria un lock, se deja marcado como HACK.
 - **PR-A (esta rama): cerrar el camino de edit-tools a APROBADO.** Decision de Karen (2026-10-01).
   Una tool de edicion (Write/Edit/MultiEdit/NotebookEdit) que CAMBIE el Estado de un brief a APROBADO
   se deniega; se reconstruye el contenido resultante y se lee el Estado con la misma regex que el

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -362,6 +362,34 @@ test('subagent-stop persists a CLOSED verdict bound to HEAD and the report hash'
   assert.equal(state.reportHash, repo.reportHash)
   assert.equal(state.unverified, 0)
 })
+
+test('subagent-stop no pisa las claves de otros gates al persistir, ni deja temporales', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: repo.dir, encoding: 'utf8' }).trim()
+  const dir = join(repo.dir, gitDir)
+  writeFileSync(join(dir, 'claude-review.json'), JSON.stringify({ 'code-reviewer': { verdict: 'APPROVE' } }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  const state = readReviewState(repo.dir)
+  assert.equal(state['code-reviewer'].verdict, 'APPROVE')
+  assert.equal(state['release-verifier'].verdict, 'CLOSED')
+  assert.deepEqual(readdirSync(dir).filter((f) => f.endsWith('.tmp')), [])
+})
+
+// La guarda de readState: null revienta al indexar; array pierde la clave en silencio. Ambos
+// deben persistir limpio. Sin la guarda, el caso null tira TypeError (exit != 0).
+for (const bad of ['null', '[]']) {
+  test(`subagent-stop sobre un estado no-objeto (${bad}) no revienta y persiste el veredicto`, () => {
+    const repo = makeRepo()
+    writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: repo.dir, encoding: 'utf8' }).trim()
+    writeFileSync(join(repo.dir, gitDir, 'claude-review.json'), bad)
+    const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(readReviewState(repo.dir)['release-verifier'].verdict, 'CLOSED')
+  })
+}
 
 test('subagent-stop blocks when the verifier did not write the exact RELEASE line', () => {
   const repo = makeRepo()
