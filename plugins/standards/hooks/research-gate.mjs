@@ -16,8 +16,8 @@
 // Requiere el layout de link.sh (plugins standards y product en el mismo arbol): importa lint-brief
 // del skill research. En un plugin suelto el import falla, el hook sale con error y no bloquea.
 //
-// HACK: solo ve las tools de edicion. Un archivo escrito por Bash (heredoc, sed -i, cp) no pasa por
-// aqui. Extender a Bash cuando aparezca un caso real de ese atajo.
+// Este hook ve las tools de edicion; las escrituras por Bash o PowerShell las cubre bash-writes.mjs con
+// las mismas reglas (analisis previo + diff posterior). Su HACK nombra lo que ninguno de los dos ve.
 // HACK: en la rama por defecto de un repo SIN remoto, la base es HEAD: cada commit reinicia el
 // conteo. Los commits ya pasan por review-gate. Contar desde el primer commit propio cuando aparezca
 // un repo local-only que lo necesite.
@@ -28,8 +28,7 @@
 // APROBADO es la valvula manual de Karen tras un ESCALATE. Ella la abre con `! sed`/`! ...`, que corre
 // fuera de PreToolUse (como `! git commit`). Una TOOL DE EDICION que cambie el Estado de un brief a
 // APROBADO se deniega (flipsBriefToAprobado): por ese camino el campo es autoridad humana, no un bypass
-// que un agente se ponga a si mismo. Residual: un agente aun podria escribirlo por Bash (sed -i, echo),
-// que no pasa por este hook -- es el mismo hueco de Bash del HACK de arriba, no se cierra aqui.
+// que un agente se ponga a si mismo. Por Bash lo detecta bash-writes.mjs, que detiene y avisa sin revertir.
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -425,7 +424,7 @@ function runSubagentStop(input) {
 
 // Estado de la rama que decide el gate: lineas de codigo cambiadas contra su base (+ no trackeadas),
 // si toca dependencias y los briefs que agrega o modifica. `budget` corta la lectura de no trackeados
-// en cuanto se sabe la respuesta; otro llamador puede pasar un tope mayor si compara antes/despues.
+// en cuanto se sabe la respuesta; el diff posterior de Bash pasa un tope mayor porque compara antes/despues.
 export function branchContext(root, budget = OMIT_MAX_LINES) {
   const base = branchBase(root)
   // --no-renames: un renombre se cuenta como borrado + alta, asi una edicion grande no se esconde.

@@ -61,7 +61,7 @@ else
 fi
 
 echo "gate de revision registrado en settings.json:"
-for h in review-gate pentest-scope release-gate work-repo; do
+for h in review-gate pentest-scope release-gate work-repo bash-writes; do
   if grep -q "$h.mjs" "$CLAUDE/settings.json" 2>/dev/null; then
     ok "hook $h registrado"
   else

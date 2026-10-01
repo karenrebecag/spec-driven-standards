@@ -184,6 +184,40 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/bash-writes.mjs pre",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/bash-writes.mjs post",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/bash-writes.mjs post-failure",
+            "timeout": 15
+          }
+        ]
       }
     ]
   },
