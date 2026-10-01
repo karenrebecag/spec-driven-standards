@@ -38,6 +38,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { lintBrief, readProjectVersions } from '../../product/skills/research/lint-brief.mjs'
+import { finalReport } from './handback.mjs'
 import { finishWork, workOf } from './work-repo.mjs'
 
 export const OMIT_MAX_LINES = 20
@@ -204,6 +205,7 @@ export function briefVerdict(md, projectVersions) {
 
 // Veredicto firmado por research-verifier. Fail-closed: la ULTIMA linea no vacia debe casar EXACTO.
 const RESEARCH_RE = /^RESEARCH:\s+(AUTO|ESCALATE)\s+unverified=(\d+)\s+contradictions=(\d+)$/
+const RESEARCH_FINAL_RE = /(?:^|\n)RESEARCH:\s+(AUTO|ESCALATE)\s+unverified=\d+\s+contradictions=\d+\s*$/
 
 export function parseResearchVerdict(text) {
   if (typeof text !== 'string') return null
@@ -395,8 +397,11 @@ function readBriefIn(root, briefPath) {
 // a ciegas. Karen siempre puede aprobar con APROBADO.
 function runSubagentStop(input) {
   if (input.agent_type !== 'research-verifier') return
-  const v = parseResearchVerdict(input.last_assistant_message)
-  if (!v) return // sin linea de veredicto no hay nada firmado que registrar
+  const v = parseResearchVerdict(finalReport({ ...input, pattern: RESEARCH_FINAL_RE, noticePrefix: 'research-gate' }))
+  if (!v) {
+    finishWork(input)
+    return // sin linea de veredicto no hay nada firmado que registrar
+  }
   const work = workOf(input)
   finishWork(input)
   let root

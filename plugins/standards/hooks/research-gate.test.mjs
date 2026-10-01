@@ -321,8 +321,28 @@ const stop = (cwd, lastMsg, agentType = 'research-verifier', env) => {
   return r.stdout
 }
 
+const stopPayload = (payload, env) => {
+  const r = spawnSync('node', [HOOK, 'subagent-stop'], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+  })
+  assert.equal(r.status, 0, `subagent-stop salio con ${r.status}: ${r.stderr}`)
+  return r
+}
+
 // Firma el brief como research-verifier: emite el veredicto RESEARCH:AUTO por el CLI.
 const sign = (cwd) => stop(cwd, `revisado el brief\n${AUTO_LINE}`)
+
+function realHandbackLine(message) {
+  return JSON.stringify({
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', name: 'SubagentHandback', input: { message } }],
+    },
+  })
+}
 
 test('CLI: umbral exacto, 20 lineas pasan (con o sin salto final) y 21 no', () => {
   const repo = makeRepo()
@@ -509,12 +529,125 @@ test('subagent-stop (fallback sin log): persiste AUTO atado al hash del unico br
   assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'allow')
 })
 
+test('subagent-stop: si solo hay RESEARCH en handback, lo recupera desde agent_transcript_path', () => {
+  const repo = makeRepo()
+  const tr = join(tmp('research-gate-tr-'), 'agent.jsonl')
+  writeFileSync(tr, `${realHandbackLine(`cierre\n${AUTO_LINE}`)}\n`)
+  stopPayload({
+    agent_type: 'research-verifier',
+    last_assistant_message: 'cierre sin veredicto',
+    agent_transcript_path: tr,
+    cwd: repo,
+  })
+  assert.equal(readStateFile(repo)['research-verifier'].verdict, 'AUTO')
+})
+
+test('subagent-stop: con veredicto en ambos, prioriza last_assistant_message sobre handback', () => {
+  const repo = makeRepo()
+  const tr = join(tmp('research-gate-tr-'), 'agent.jsonl')
+  writeFileSync(tr, `${realHandbackLine(AUTO_LINE)}\n`)
+  stopPayload({
+    agent_type: 'research-verifier',
+    last_assistant_message: 'cierre\nRESEARCH: ESCALATE unverified=2 contradictions=1',
+    agent_transcript_path: tr,
+    cwd: repo,
+  })
+  const st = readStateFile(repo)['research-verifier']
+  assert.equal(st.verdict, 'ESCALATE')
+  assert.equal(st.unverified, 2)
+  assert.equal(st.contradictions, 1)
+})
+
+test('subagent-stop: si last_assistant_message trae RESEARCH invalido, cae a handback valido', () => {
+  const repo = makeRepo()
+  const tr = join(tmp('research-gate-tr-'), 'agent.jsonl')
+  writeFileSync(tr, `${realHandbackLine(AUTO_LINE)}\n`)
+  stopPayload({
+    agent_type: 'research-verifier',
+    last_assistant_message: 'cierre\nRESEARCH: AUTO unverified=0',
+    agent_transcript_path: tr,
+    cwd: repo,
+  })
+  const st = readStateFile(repo)['research-verifier']
+  assert.equal(st.verdict, 'AUTO')
+  assert.equal(st.unverified, 0)
+  assert.equal(st.contradictions, 0)
+})
+
+test('subagent-stop: sin veredicto ni en last_assistant_message ni en handback, no registra estado', () => {
+  const repo = makeRepo()
+  const tr = join(tmp('research-gate-tr-'), 'agent.jsonl')
+  writeFileSync(tr, `${realHandbackLine('cierre sin linea de veredicto')}\n`)
+  stopPayload({
+    agent_type: 'research-verifier',
+    last_assistant_message: 'cierre sin veredicto',
+    agent_transcript_path: tr,
+    cwd: repo,
+  })
+  assert.equal(readStateFile(repo), null)
+})
+
+test('subagent-stop: ignora handback adversarial anidado y no registra estado', () => {
+  const repo = makeRepo()
+  const tr = join(tmp('research-gate-tr-'), 'agent.jsonl')
+  writeFileSync(
+    tr,
+    `${JSON.stringify({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            name: 'OtherTool',
+            input: {
+              payload: { name: 'SubagentHandback', input: { message: AUTO_LINE } },
+            },
+          },
+          {
+            type: 'tool_result',
+            name: 'OtherTool',
+            content: { name: 'SubagentHandback', input: { message: AUTO_LINE } },
+          },
+        ],
+      },
+    })}\n`,
+  )
+  stopPayload({
+    agent_type: 'research-verifier',
+    last_assistant_message: 'cierre sin veredicto',
+    agent_transcript_path: tr,
+    cwd: repo,
+  })
+  assert.equal(readStateFile(repo), null)
+})
+
 test('subagent-stop: un agent_type que no es research-verifier no firma nada', () => {
   const repo = makeRepo()
   writeBrief(repo)
   stop(repo, `revisado\n${AUTO_LINE}`, 'code-reviewer')
   assert.equal(readStateFile(repo), null)
   assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'deny')
+})
+
+test('subagent-stop: salida final sin veredicto limpia el log del agente', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  const logTmp = tmp('research-gate-log-clean-')
+  const log = join(logTmp, 'claude-gates', 's1', 'v1.jsonl')
+  logRead(logTmp, repo, join(repo, 'docs/research/demo.md'))
+  assert.doesNotThrow(() => readFileSync(log, 'utf8'))
+  const r = stopPayload(
+    {
+      ...IDS,
+      agent_type: 'research-verifier',
+      last_assistant_message: 'cierre sin veredicto',
+      cwd: repo,
+    },
+    { TMPDIR: logTmp },
+  )
+  assert.equal(r.stdout, '')
+  assert.throws(() => readFileSync(log, 'utf8'))
 })
 
 test('subagent-stop (fallback sin log): 0 o 2+ briefs cambiados persisten briefHash vacio y no habilitan AUTO', () => {

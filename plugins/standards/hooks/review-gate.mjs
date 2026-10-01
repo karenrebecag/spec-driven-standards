@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync, realpathSync, renameSync } from
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { finalReport } from './handback.mjs'
 import { finishWork, isGitCommit, repoFromCommand, repoRoot, workOf } from './work-repo.mjs'
 
 const REVIEWERS = ['code-reviewer', 'security-reviewer', 'qa-reviewer']
@@ -34,6 +35,10 @@ export function parseVerdict(text) {
   for (const m of text.matchAll(VERDICT_RE)) last = m
   if (!last) return null
   return { verdict: last[1].toUpperCase(), critical: Number(last[2]), high: Number(last[3]) }
+}
+
+function verdictFromSubagentStop(input) {
+  return parseVerdict(finalReport({ ...input, pattern: VERDICT_RE, noticePrefix: 'review-gate' }))
 }
 
 export function isCodeDiff(files) {
@@ -143,11 +148,21 @@ function readStdin() {
 function runSubagentStop(input) {
   const agent = input.agent_type
   if (!REVIEWERS.includes(agent)) return
-  if (input.stop_hook_active) return // ya estamos en un bucle de bloqueo: no re-bloquear
 
   const cwd = input.cwd || process.cwd()
-  const v = parseVerdict(input.last_assistant_message)
+  const v = verdictFromSubagentStop(input)
   if (!v) {
+    if (input.stop_hook_active) {
+      finishWork(input)
+      process.stdout.write(
+        JSON.stringify({
+          systemMessage:
+            `review-gate: ${agent} termino sin VERDICT parseable; no se registro APPROVE. ` +
+            'Con handback, confirma que SubagentHandback incluya la linea VERDICT en su message.',
+        }),
+      )
+      return
+    }
     process.stdout.write(
       JSON.stringify({
         decision: 'block',
