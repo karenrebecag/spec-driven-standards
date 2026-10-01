@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync, mkdirSync, realpathSync, statSync } from '
 import { join, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { validateRegresionPath } from './release-verify.mjs'
+import { validateRegresionPath, branchBase } from './release-verify.mjs'
 
 const DEPLOY_RE = /\b(vercel\s+(deploy\s+)?.*--prod|vercel\s+--prod|supabase\s+db\s+push|supabase\s+db\s+reset)\b/
 const APPROVALS = ['qa', 'security', 'release']
@@ -218,6 +218,42 @@ function reportPathOf(dossier, cwd) {
   return isAbsolute(rp) ? rp : join(cwd, rp)
 }
 
+// Normaliza una ruta de repo para comparar: separadores a `/`, colapsa `//` y quita `./` inicial.
+function normPath(p) {
+  return p.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^\.\//, '')
+}
+
+// Tests que NO aparecen en el diff de la rama (base..HEAD). Devuelve [] (omite la atadura) cuando:
+// no hay base de rama (HEAD===base, o un repo sin main/master/origin: branchBase con allowRoot=false
+// devuelve null), o el diff no se puede computar. HACK: cuando se omite, solo queda la atadura por
+// hash de pre-deploy (PR-1); es una atadura SECUNDARIA. Disparador de mejora: exigir una base
+// explicita de release (el ultimo SHA desplegado) cuando no hay rama por defecto.
+function testsOutsideBranchDiff(cwd, tests) {
+  if (tests.length === 0) return []
+  let base
+  let head
+  try {
+    base = branchBase(cwd, { allowRoot: false })
+    head = git(cwd, ['rev-parse', 'HEAD'])
+  } catch {
+    return []
+  }
+  if (!base || base === head) return []
+  let changed
+  try {
+    // -z evita que git entrecomille nombres no-ASCII (core.quotePath). `--name-only` imprime rutas
+    // relativas a la raiz del repo; el hook corre con cwd = esa raiz (ahi vive el dossier), asi que
+    // se comparan contra la ruta del reporte tal cual, ambas normalizadas. Un cwd en subdirectorio
+    // daria un falso rechazo (falla cerrado), no un bypass.
+    changed = new Set(
+      gitRaw(cwd, ['diff', '--name-only', '-z', `${base}..HEAD`]).split('\0').filter(Boolean).map(normPath),
+    )
+  } catch {
+    return []
+  }
+  return tests.filter((t) => !changed.has(normPath(t)))
+}
+
 function block(reason) {
   process.stdout.write(JSON.stringify({ decision: 'block', reason }))
 }
@@ -294,13 +330,21 @@ function runSubagentStop(input) {
       reject('Alguna ruta Regresion es invalida o sale del repo: ese hallazgo no puede contarse como cerrado.')
       return
     }
+    // Atadura por diff (sign-time, sobre la rama): cada test de regresion debe ser parte de ESTE
+    // cambio, no un archivo preexistente. En main (HEAD === base) no hay diff de rama y se omite:
+    // la atadura por hash de pre-deploy sigue. Un test fuera del diff de la rama rechaza el cierre.
+    const missing = testsOutsideBranchDiff(cwd, [...new Set(valid)])
+    if (missing.length) {
+      reject(`Estos tests de regresion no aparecen en el diff de la rama (${missing.join(', ')}): un cierre debe apoyarse en tests que este cambio introduce o toca, no en archivos preexistentes. Firma sobre la rama del cambio.`)
+      return
+    }
   }
 
   // HACK: el gate confia en el conteo `closed` que el agente declara; no re-ejecuta release-verify.mjs
   // por hallazgo. Techo: un agente comprometido o inyectado por el reporte podria firmar CLOSED sin
   // correr el verificador. Disparador de mejora: cerrar cuando el gate re-ejecute verifyFinding sobre
   // state.tests en pre-deploy (o el modo diff de PR-3 exija los tests en el diff del PR).
-  const tests = [...new Set(valid)]
+  const tests = [...new Set(valid.map(normPath))]
   const reportHash = sha256(reportBuf)
 
   const state = readState(cwd)

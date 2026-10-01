@@ -17,6 +17,11 @@ Tres decisiones grises, cada una con opciones y evidencia en contra:
 ## Reutilizacion
 
 - PR-1 (release-verifier + modo subagent-stop del gate): en main (PR #13).
+- **PR-3 (esta rama): Fase 3 — atadura secundaria por diff (D2).** Decision de Karen (2026-10-01):
+  el check corre en **sign-time sobre la rama** (subagent-stop), no en pre-deploy: con `branchBase`
+  el diff de la rama es real; en main seria vacio. Se rechaza firmar un CLOSED si un test de
+  regresion no aparece en `git diff --name-only <branchBase>..HEAD`. Si HEAD ya es la base (sin
+  rama), se omite (la atadura por hash de PR-1 sigue). Sin investigacion nueva (node=22).
 - **PR-2 (esta rama): Fase 2 — check de arbol limpio en pre-deploy.** Cubierto por la seccion
   "Fase 2" de este brief (el agujero del working tree frente a HEAD). Sin investigacion nueva:
   reusa `dirtyPaths` ya introducido en PR-1 y el inyectable puro de `evaluateRelease`. Versiones
