@@ -17,6 +17,12 @@ Tres decisiones grises, cada una con opciones y evidencia en contra:
 ## Reutilizacion
 
 - PR-1 (release-verifier + modo subagent-stop del gate): en main (PR #13).
+- **PR-4 (esta rama): Fase 4 — retirar el HACK de research-gate (D3).** Decision de Karen
+  (2026-10-01): "AUTO firmado; APROBADO = valvula manual". research-verifier persiste su veredicto
+  `RESEARCH:` via subagent-stop, atado al sha256 del brief; research-gate exige ese veredicto AUTO
+  firmado cuando el brief declara AUTO (retira el HACK de confiar en el campo para ese camino) y
+  deja APROBADO como override humano documentado (como `! git commit`). Reusa el patron de persist de
+  review-gate/release-gate. Sin investigacion nueva (node=22).
 - **PR-3 (esta rama): Fase 3 — atadura secundaria por diff (D2).** Decision de Karen (2026-10-01):
   el check corre en **sign-time sobre la rama** (subagent-stop), no en pre-deploy: con `branchBase`
   el diff de la rama es real; en main seria vacio. Se rechaza firmar un CLOSED si un test de

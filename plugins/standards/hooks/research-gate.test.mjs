@@ -1,9 +1,9 @@
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync, execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, realpathSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, appendFileSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { brief } from '../../product/skills/research/brief-fixture.mjs'
@@ -17,6 +17,10 @@ import {
   touchesDependencies,
   proposedLines,
   briefVerdict,
+  briefAllows,
+  parseResearchVerdict,
+  briefHashOf,
+  resolveStatePath,
   evaluateEdit,
 } from './research-gate.mjs'
 
@@ -123,6 +127,55 @@ test('briefVerdict: caduca si la version del proyecto cambio', () => {
   assert.equal(briefVerdict(brief(AUTO), { x: '2' }).ok, false)
 })
 
+test('parseResearchVerdict: ultima linea exacta; fail-closed ante prosa o campo ausente', () => {
+  assert.deepEqual(parseResearchVerdict('bla\nRESEARCH: AUTO unverified=0 contradictions=0'), {
+    verdict: 'AUTO',
+    unverified: 0,
+    contradictions: 0,
+  })
+  assert.deepEqual(parseResearchVerdict('RESEARCH: ESCALATE unverified=2 contradictions=1'), {
+    verdict: 'ESCALATE',
+    unverified: 2,
+    contradictions: 1,
+  })
+  assert.equal(parseResearchVerdict('RESEARCH: AUTO unverified=0 contradictions=0\ngracias'), null)
+  assert.equal(parseResearchVerdict('RESEARCH: AUTO unverified=0'), null)
+  assert.equal(parseResearchVerdict('aprobado, confia en mi'), null)
+  assert.equal(parseResearchVerdict(null), null)
+})
+
+test('briefAllows: un AUTO exige el veredicto RESEARCH:AUTO firmado atado al hash del brief', () => {
+  const md = brief(AUTO)
+  const h = briefHashOf(md)
+  const signed = { verdict: 'AUTO', unverified: 0, contradictions: 0, briefHash: h }
+  assert.equal(briefAllows(md, { x: '1' }, h, signed).ok, true)
+  // Sin veredicto persistido: no habilita (el agujero que cerraba el HACK).
+  assert.equal(briefAllows(md, { x: '1' }, h, undefined).ok, false)
+  // Veredicto de otro brief (hash distinto): no habilita.
+  assert.equal(briefAllows(md, { x: '1' }, h, { ...signed, briefHash: 'otro' }).ok, false)
+  // ESCALATE firmado no es AUTO: no habilita.
+  assert.equal(briefAllows(md, { x: '1' }, h, { ...signed, verdict: 'ESCALATE' }).ok, false)
+  // Con unverified/contradictions distintos de 0 tampoco.
+  assert.equal(briefAllows(md, { x: '1' }, h, { ...signed, unverified: 1 }).ok, false)
+  assert.equal(briefAllows(md, { x: '1' }, h, { ...signed, contradictions: 1 }).ok, false)
+})
+
+test('resolveStatePath: respeta un git-dir absoluto (worktree) y une el relativo', () => {
+  assert.equal(resolveStatePath('/r', '.git'), '/r/.git/claude-review.json')
+  assert.equal(resolveStatePath('/r', '/abs/wt/.git'), '/abs/wt/.git/claude-review.json')
+})
+
+test('briefAllows: APROBADO (valvula manual de Karen) habilita sin veredicto firmado', () => {
+  const md = brief({ ...AUTO, estado: 'APROBADO', verificador: 'research-verifier 2026-09-30 ESCALATE' })
+  assert.equal(briefAllows(md, { x: '1' }, briefHashOf(md), undefined).ok, true)
+})
+
+test('briefAllows: un brief que no pasa briefVerdict (ESCALADO) no habilita ni con firma', () => {
+  const md = brief({ ...AUTO, estado: 'ESCALADO', verificador: 'research-verifier 2026-09-30 ESCALATE' })
+  const h = briefHashOf(md)
+  assert.equal(briefAllows(md, { x: '1' }, h, { verdict: 'AUTO', unverified: 0, contradictions: 0, briefHash: h }).ok, false)
+})
+
 test('evaluateEdit: el umbral es inclusivo en 20', () => {
   assert.equal(evaluateEdit({ changedLines: 10, proposed: OMIT_MAX_LINES - 10, depsTouched: false, briefs: [] }).allow, true)
   const r = evaluateEdit({ changedLines: 15, proposed: 6, depsTouched: false, briefs: [] })
@@ -199,6 +252,37 @@ const writeBrief = (repo, opts = AUTO) => {
   writeFileSync(join(repo, 'docs/research/demo.md'), brief(opts))
 }
 
+const AUTO_LINE = 'RESEARCH: AUTO unverified=0 contradictions=0'
+
+// Ruta del estado compartido, igual que statePath del hook (git-dir absoluto en worktrees).
+const stateFile = (cwd) => {
+  const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd, encoding: 'utf8' }).trim()
+  return join(isAbsolute(gitDir) ? gitDir : join(cwd, gitDir), 'claude-review.json')
+}
+const readStateFile = (cwd) => {
+  try {
+    return JSON.parse(readFileSync(stateFile(cwd), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// Invoca el hook en modo subagent-stop, el CAMINO DE PRODUCCION que persiste el veredicto. Las
+// pruebas no reimplementan la escritura del estado: un bug en runSubagentStop (clave, hash, ruta)
+// tiene que verse aqui, no quedar enmascarado por un helper que copia su logica.
+const stop = (cwd, lastMsg, agentType = 'research-verifier', env) => {
+  const r = spawnSync('node', [HOOK, 'subagent-stop'], {
+    input: JSON.stringify({ agent_type: agentType, last_assistant_message: lastMsg, cwd }),
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+  })
+  assert.equal(r.status, 0, `subagent-stop salio con ${r.status}: ${r.stderr}`)
+  return r.stdout
+}
+
+// Firma el brief como research-verifier: emite el veredicto RESEARCH:AUTO por el CLI.
+const sign = (cwd) => stop(cwd, `revisado el brief\n${AUTO_LINE}`)
+
 test('CLI: umbral exacto, 20 lineas pasan (con o sin salto final) y 21 no', () => {
   const repo = makeRepo()
   const f = join(repo, 'src/limite.ts')
@@ -261,6 +345,7 @@ test('CLI: un manifiesto ya modificado o un lockfile nuevo bloquean el siguiente
   writeFileSync(join(lock, 'apps/web/pnpm-lock.yaml'), 'lockfileVersion: 9\n')
   assert.equal(run(lock, 'Write', { file_path: join(lock, 'src/x.ts'), content: lines(1) }), 'deny')
   writeBrief(lock)
+  sign(lock)
   assert.equal(run(lock, 'Write', { file_path: join(lock, 'src/x.ts'), content: lines(1) }), 'allow')
 })
 
@@ -293,6 +378,9 @@ test('CLI: un brief AUTO en la rama habilita; BORRADOR se nombra en el motivo', 
   const r = hook(JSON.stringify({ tool_name: 'Write', tool_input: { file_path: join(repo, 'src/c.ts'), content: lines(40) }, cwd: repo }))
   assert.match(JSON.parse(r).hookSpecificOutput.permissionDecisionReason, /docs\/research\/demo\.md: Estado BORRADOR/)
   writeBrief(repo)
+  // AUTO sin firma no habilita; con la firma de research-verifier atada al hash, si.
+  assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'deny')
+  sign(repo)
   assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'allow')
 })
 
@@ -314,6 +402,7 @@ test('CLI: el brief tiene que ser de ESTA rama; reusarlo es tocarlo', () => {
   const big = { file_path: join(repo, 'src/d.ts'), content: lines(40) }
   assert.equal(run(repo, 'Write', big), 'deny')
   appendFileSync(join(repo, 'docs/research/demo.md'), '\n<!-- reutilizado en feat/y -->\n')
+  sign(repo) // reusar es tocar el brief: su hash cambia, hay que re-firmar (o Karen aprueba)
   assert.equal(run(repo, 'Write', big), 'allow')
 })
 
@@ -363,7 +452,98 @@ test('CLI: en un worktree el gate cuenta la rama del worktree', () => {
   g(repo, 'worktree', 'add', '-q', wt, '-b', 'feat/w')
   assert.equal(run(wt, 'Write', { file_path: join(wt, 'src/c.ts'), content: lines(40) }), 'deny')
   writeBrief(wt)
+  sign(wt)
   assert.equal(run(wt, 'Write', { file_path: join(wt, 'src/c.ts'), content: lines(40) }), 'allow')
+})
+
+// ---- subagent-stop: el camino de produccion que firma el AUTO ----
+
+test('subagent-stop: research-verifier persiste AUTO atado al hash del unico brief y habilita', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  sign(repo)
+  const st = readStateFile(repo)['research-verifier']
+  assert.equal(st.verdict, 'AUTO')
+  assert.equal(st.briefHash, briefHashOf(readFileSync(join(repo, 'docs/research/demo.md'), 'utf8')))
+  assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'allow')
+})
+
+test('subagent-stop: un agent_type que no es research-verifier no firma nada', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  stop(repo, `revisado\n${AUTO_LINE}`, 'code-reviewer')
+  assert.equal(readStateFile(repo), null)
+  assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'deny')
+})
+
+test('subagent-stop: 0 o 2+ briefs cambiados persisten briefHash vacio y no habilitan AUTO', () => {
+  const none = makeRepo()
+  sign(none)
+  assert.equal(readStateFile(none)['research-verifier'].briefHash, '')
+
+  const two = makeRepo()
+  mkdirSync(join(two, 'docs/research'), { recursive: true })
+  writeFileSync(join(two, 'docs/research/demo.md'), brief(AUTO))
+  writeFileSync(join(two, 'docs/research/otro.md'), brief(AUTO))
+  sign(two)
+  assert.equal(readStateFile(two)['research-verifier'].briefHash, '')
+  assert.equal(run(two, 'Write', { file_path: join(two, 'src/c.ts'), content: lines(40) }), 'deny')
+})
+
+test('subagent-stop: sin linea de veredicto no persiste; ESCALATE persiste pero no habilita', () => {
+  const prose = makeRepo()
+  writeBrief(prose)
+  stop(prose, 'el brief se ve bien, confia en mi')
+  assert.equal(readStateFile(prose), null)
+  assert.equal(run(prose, 'Write', { file_path: join(prose, 'src/c.ts'), content: lines(40) }), 'deny')
+
+  const esc = makeRepo()
+  writeBrief(esc)
+  stop(esc, 'RESEARCH: ESCALATE unverified=2 contradictions=1')
+  assert.equal(readStateFile(esc)['research-verifier'].verdict, 'ESCALATE')
+  assert.equal(run(esc, 'Write', { file_path: join(esc, 'src/c.ts'), content: lines(40) }), 'deny')
+})
+
+test('subagent-stop: persistir no borra las claves de otros gates', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  const p = stateFile(repo)
+  mkdirSync(join(p, '..'), { recursive: true })
+  writeFileSync(p, JSON.stringify({ 'code-reviewer': { verdict: 'APPROVE' } }))
+  sign(repo)
+  const st = readStateFile(repo)
+  assert.equal(st['code-reviewer'].verdict, 'APPROVE')
+  assert.equal(st['research-verifier'].verdict, 'AUTO')
+})
+
+test('subagent-stop: editar el brief tras firmar vuelve a denegar (el hash ata el cuerpo)', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  sign(repo)
+  const big = { file_path: join(repo, 'src/c.ts'), content: lines(40) }
+  assert.equal(run(repo, 'Write', big), 'allow')
+  appendFileSync(join(repo, 'docs/research/demo.md'), '\n- afirmacion nueva sin procedencia\n')
+  assert.equal(run(repo, 'Write', big), 'deny')
+})
+
+test('briefHashOf: Estado y Verificador del header no entran al hash (firmar en BORRADOR vale para AUTO)', () => {
+  const md = brief(AUTO)
+  const borrador = md
+    .replace(/Estado:\s*AUTO/, 'Estado: BORRADOR')
+    .replace(/Verificador:.*/, 'Verificador: pendiente')
+  assert.notEqual(md, borrador)
+  assert.equal(briefHashOf(md), briefHashOf(borrador))
+  // Pero una linea del cuerpo si cambia el hash: el cuerpo sigue atado byte a byte.
+  assert.notEqual(briefHashOf(md), briefHashOf(md + '\n- otra afirmacion\n'))
+})
+
+test('CLI: un estado corrupto en claude-review.json deniega, no revienta', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  const p = stateFile(repo)
+  mkdirSync(join(p, '..'), { recursive: true })
+  writeFileSync(p, 'no es json {')
+  assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'deny')
 })
 
 test('CLI: falla abierto sin salida ante git roto, stdin invalido u otras tools', () => {

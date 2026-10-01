@@ -21,11 +21,17 @@
 // HACK: en la rama por defecto de un repo SIN remoto, la base es HEAD: cada commit reinicia el
 // conteo. Los commits ya pasan por review-gate. Contar desde el primer commit propio cuando aparezca
 // un repo local-only que lo necesite.
-// HACK: confia en el Estado que el brief declara; no verifica que research-verifier lo haya emitido.
-// Validar la firma cuando el verificador escriba su veredicto en un archivo propio.
+// Un brief AUTO solo habilita si research-verifier FIRMO ese AUTO: su modo subagent-stop persiste el
+// veredicto RESEARCH atado al sha256 del brief (clave `research-verifier` en claude-review.json), y
+// aqui se exige que exista y case el hash. Antes se confiaba en el campo Estado, que un agente podia
+// escribir sin correr el verificador.
+// HACK: APROBADO es la valvula manual de Karen tras un ESCALATE (lo pone con `! ...`/sed). El gate no
+// puede distinguir su edicion de la de un agente, igual que `! git commit` no pasa por PreToolUse: se
+// acepta el campo como autoridad humana. Cerrarlo exigiria que el override tambien se firme.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -135,14 +141,40 @@ export function proposedLines(toolName, input) {
   return 0
 }
 
-// { ok, reason } de un brief: Estado habilitante y lint limpio contra las versiones del proyecto.
+// { ok, reason, estado } de un brief: Estado habilitante y lint limpio contra las versiones.
 export function briefVerdict(md, projectVersions) {
   const estado = (String(md).match(/Estado:\s*([A-Z]+)/) || [])[1] || '?'
-  if (estado !== 'AUTO' && estado !== 'APROBADO') return { ok: false, reason: `Estado ${estado}` }
+  if (estado !== 'AUTO' && estado !== 'APROBADO') return { ok: false, reason: `Estado ${estado}`, estado }
   const lint = lintBrief(md, projectVersions)
   if (!lint.ok) {
     const first = lint.errors.slice(0, 3).map((e) => `${e.rule} ${e.message}`).join('; ')
-    return { ok: false, reason: `no pasa lint-brief (${lint.errors.length} errores: ${first})` }
+    return { ok: false, reason: `no pasa lint-brief (${lint.errors.length} errores: ${first})`, estado }
+  }
+  return { ok: true, reason: '', estado }
+}
+
+// Veredicto firmado por research-verifier. Fail-closed: la ULTIMA linea no vacia debe casar EXACTO.
+const RESEARCH_RE = /^RESEARCH:\s+(AUTO|ESCALATE)\s+unverified=(\d+)\s+contradictions=(\d+)$/
+
+export function parseResearchVerdict(text) {
+  if (typeof text !== 'string') return null
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  if (lines.length === 0) return null
+  const m = RESEARCH_RE.exec(lines[lines.length - 1])
+  if (!m) return null
+  return { verdict: m[1], unverified: Number(m[2]), contradictions: Number(m[3]) }
+}
+
+// Decide si un brief HABILITA el codigo, combinando briefVerdict con la regla de firma del AUTO.
+// AUTO exige un veredicto RESEARCH:AUTO firmado por research-verifier atado al hash de ESTE brief;
+// APROBADO es la valvula manual de Karen y basta el campo (el lint ya corrio en briefVerdict).
+export function briefAllows(md, projectVersions, briefHash, verifierState) {
+  const v = briefVerdict(md, projectVersions)
+  if (!v.ok) return { ok: false, reason: v.reason }
+  if (v.estado === 'APROBADO') return { ok: true, reason: '' }
+  const s = verifierState
+  if (!s || s.verdict !== 'AUTO' || s.unverified !== 0 || s.contradictions !== 0 || s.briefHash !== briefHash) {
+    return { ok: false, reason: 'Estado AUTO sin veredicto RESEARCH:AUTO firmado por research-verifier para este brief (corre /research; su verificador debe emitir AUTO, o deja que Karen apruebe con APROBADO si escala)' }
   }
   return { ok: true, reason: '' }
 }
@@ -169,6 +201,57 @@ export function evaluateEdit({ changedLines, proposed, depsTouched, briefs }) {
 
 function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 })
+}
+
+// Estado compartido con review-gate/release-gate: .git/claude-review.json, una clave por agente.
+// En un worktree --git-dir es absoluto; resolve respeta el absoluto y solo une el relativo.
+export function resolveStatePath(cwd, gitDir) {
+  return join(resolve(cwd, gitDir), 'claude-review.json')
+}
+
+function statePath(root) {
+  return resolveStatePath(root, git(root, ['rev-parse', '--git-dir']).trim())
+}
+
+function readState(root) {
+  try {
+    const s = JSON.parse(readFileSync(statePath(root), 'utf8'))
+    // Un JSON valido pero no-objeto (null, array, numero) haria throw al indexarlo fuera del try de
+    // branchBriefs y el gate fallaria ABIERTO; para AUTO, ausencia de estado debe fallar cerrado.
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeState(root, state) {
+  const p = statePath(root)
+  mkdirSync(join(p, '..'), { recursive: true })
+  writeFileSync(p, JSON.stringify(state, null, 2))
+}
+
+// El hash ata el CUERPO del brief, no las dos lineas que /research escribe DESPUES de que el
+// verificador firma: Estado (pasa de BORRADOR a AUTO) y Verificador. Si las cubriera, ese paso
+// invalidaria la propia firma y ningun AUTO honesto pasaria. Normaliza solo la PRIMERA ocurrencia
+// de cada una (el header), asi el cuerpo sigue atado byte a byte y no se puede falsear desde el texto.
+function normalizeForHash(md) {
+  return String(md)
+    .replace(/(^|\n)([^\n]*\bEstado:)[^\n|]*/, '$1$2')
+    .replace(/(^|\n)(Verificador:)[^\n]*/, '$1$2')
+}
+
+export function briefHashOf(md) {
+  return createHash('sha256').update(normalizeForHash(md)).digest('hex')
+}
+
+// Briefs (no INDEX) que la rama agrego o modifico, trackeados o no, por su ruta relativa a la raiz.
+function changedBriefPaths(root) {
+  const base = branchBase(root)
+  const diff = splitZ(git(root, ['diff', '--name-only', '-z', base]))
+  const untracked = untrackedFiles(root)
+  return [...new Set([...diff, ...untracked])].filter(
+    (f) => f.startsWith(RESEARCH_DIR) && f.endsWith('.md') && !f.endsWith('/INDEX.md'),
+  )
 }
 
 function nearestDir(path) {
@@ -227,15 +310,43 @@ function untrackedLines(root, files, budget) {
 
 function branchBriefs(root, changed) {
   const versions = readProjectVersions(root)
+  const verifierState = readState(root)['research-verifier']
   return changed
     .filter((f) => f.startsWith(RESEARCH_DIR) && f.endsWith('.md') && !f.endsWith('/INDEX.md'))
     .map((path) => {
       try {
-        return { path, ...briefVerdict(readFileSync(join(root, path), 'utf8'), versions) }
+        const md = readFileSync(join(root, path), 'utf8')
+        return { path, ...briefAllows(md, versions, briefHashOf(md), verifierState) }
       } catch {
         return { path, ok: false, reason: 'no se pudo leer' }
       }
     })
+}
+
+// SubagentStop de research-verifier: persiste su veredicto atado al sha256 del brief de la rama.
+// Si no hay exactamente un brief cambiado, se persiste sin binding util (briefHash=''), de modo que
+// un AUTO no quede auto-satisfecho a ciegas; Karen siempre puede aprobar con APROBADO.
+function runSubagentStop(input) {
+  if (input.agent_type !== 'research-verifier') return
+  const cwd = input.cwd || process.cwd()
+  const v = parseResearchVerdict(input.last_assistant_message)
+  if (!v) return // sin linea de veredicto no hay nada firmado que registrar
+  let root
+  try {
+    root = realpathSync(git(cwd, ['rev-parse', '--show-toplevel']).trim())
+  } catch {
+    return // fuera de un repo git
+  }
+  let briefHash = ''
+  try {
+    const briefs = changedBriefPaths(root)
+    if (briefs.length === 1) briefHash = briefHashOf(readFileSync(join(root, briefs[0]), 'utf8'))
+  } catch {
+    briefHash = ''
+  }
+  const state = readState(root)
+  state['research-verifier'] = { verdict: v.verdict, unverified: v.unverified, contradictions: v.contradictions, briefHash, ts: Date.now() }
+  writeState(root, state)
 }
 
 export function decide(input, home = realHome()) {
@@ -290,6 +401,14 @@ function readStdin() {
 }
 
 function main() {
+  if (process.argv[2] === 'subagent-stop') {
+    try {
+      runSubagentStop(readStdin())
+    } catch {
+      // persistir es best-effort: nunca romper el stop del verificador
+    }
+    process.exit(0)
+  }
   let result = null
   try {
     result = decide(readStdin())
