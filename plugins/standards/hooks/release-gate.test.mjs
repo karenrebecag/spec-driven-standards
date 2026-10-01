@@ -1,14 +1,63 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { spawnSync, execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { isDeployCommand, evaluateRelease, reportChecker } from './release-gate.mjs'
+import { isDeployCommand, evaluateRelease, reportChecker, parseReleaseVerdict, resolveStatePath } from './release-gate.mjs'
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), 'release-gate.mjs')
+
+// Reporte por defecto: dos hallazgos, cada uno con su linea Regresion apuntando a un test real del
+// repo. Coincide con el conteo por defecto de releaseLine (findings=2), que es lo que el hook cruza.
+const DEFAULT_REPORT = `# pentest
+- id CN-001 CRITICAL
+  Regresion: tests/a.test.mjs::vuln a
+- id CN-002 HIGH
+  Regresion: tests/b.test.mjs::vuln b
+`
+
+// Crea un repo git real con un reporte de pentest y los tests que nombra, para probar los caminos
+// que dependen de HEAD y del git-dir (persistencia del veredicto, atadura por SHA y por hash).
+function makeRepo({ reportBody = DEFAULT_REPORT, reportPath = 'reports/pentest.md' } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'release-repo-'))
+  const g = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+  g('init', '-q')
+  g('config', 'user.email', 't@t.t')
+  g('config', 'user.name', 't')
+  g('config', 'commit.gpgsign', 'false')
+  mkdirSync(join(dir, 'reports'), { recursive: true })
+  mkdirSync(join(dir, 'tests'), { recursive: true })
+  writeFileSync(join(dir, reportPath), reportBody)
+  writeFileSync(join(dir, 'reports/qa.md'), '# qa\nok')
+  writeFileSync(join(dir, 'tests/a.test.mjs'), '// a\n')
+  writeFileSync(join(dir, 'tests/b.test.mjs'), '// b\n')
+  g('add', '-A')
+  g('commit', '-qm', 'seed')
+  const sha = g('rev-parse', 'HEAD').trim().slice(0, 8)
+  const reportHash = createHash('sha256').update(reportBody).digest('hex')
+  return { dir, sha, reportHash, g }
+}
+
+// Invoca el hook en modo subagent-stop (SubagentStop) con un payload por stdin.
+function runSubagentStop(dir, { agent_type = 'release-verifier', last_assistant_message = '', stop_hook_active = false } = {}) {
+  return spawnSync(process.execPath, [HOOK, 'subagent-stop'], {
+    input: JSON.stringify({ agent_type, last_assistant_message, stop_hook_active, cwd: dir }),
+    encoding: 'utf8',
+  })
+}
+
+function readReviewState(dir) {
+  const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: dir, encoding: 'utf8' }).trim()
+  const p = join(dir, gitDir, 'claude-review.json')
+  return JSON.parse(readFileSync(p, 'utf8'))
+}
+
+const releaseLine = ({ verdict = 'CLOSED', sha, findings = 2, closed = 2, unverified = 0 }) =>
+  `RELEASE: ${verdict} sha=${sha} findings=${findings} closed=${closed} unverified=${unverified}`
 
 // Corre el hook como subproceso (como lo invoca Claude Code) con un payload PreToolUse por stdin.
 function runHook(dossier, command = 'vercel --prod --yes') {
@@ -121,8 +170,56 @@ const exposed = (extra = {}) =>
 const always = () => true
 const never = () => false
 
-test('evaluateRelease allows an exposed dossier when both reports exist', () => {
-  assert.equal(evaluateRelease(exposed(), SHA, NOW, { reportExists: always }).allow, true)
+// Veredicto del release-verifier atado a este SHA y al hash del reporte vigente.
+const REPORT_HASH = 'abc123'
+const goodVerifier = (extra = {}) => ({ verdict: 'CLOSED', findings: 2, closed: 2, unverified: 0, sha: SHA, reportHash: REPORT_HASH, tests: ['t.mjs'], ...extra })
+// Opciones que hacen pasar un dossier expuesto: reportes presentes + verificador CLOSED vigente.
+const exposedOk = { reportExists: always, verifierState: goodVerifier(), currentReportHash: REPORT_HASH }
+
+test('evaluateRelease allows an exposed dossier when both reports exist and the verifier closed every finding', () => {
+  assert.equal(evaluateRelease(exposed(), SHA, NOW, exposedOk).allow, true)
+})
+
+test('evaluateRelease blocks an exposed dossier when the release-verifier verdict is missing', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { reportExists: always, currentReportHash: REPORT_HASH })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /release-verifier/i)
+})
+
+test('evaluateRelease blocks an exposed dossier when the verifier reported OPEN', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { ...exposedOk, verifierState: goodVerifier({ verdict: 'OPEN', closed: 1, unverified: 1 }) })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /OPEN|cerr|unverified/i)
+})
+
+test('evaluateRelease blocks an exposed dossier when findings remain unverified', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { ...exposedOk, verifierState: goodVerifier({ unverified: 1 }) })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /unverified/i)
+})
+
+test('evaluateRelease blocks an exposed dossier when closed does not match findings', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { ...exposedOk, verifierState: goodVerifier({ closed: 1 }) })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /cerr|closed|hallazgo/i)
+})
+
+test('evaluateRelease blocks an exposed dossier when the verifier verdict is for another SHA', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { ...exposedOk, verifierState: goodVerifier({ sha: 'other123' }) })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /SHA|commit/i)
+})
+
+test('evaluateRelease blocks an exposed dossier when the report changed since it was verified', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { ...exposedOk, currentReportHash: 'different' })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /hash|cambi/i)
+})
+
+test('evaluateRelease fails closed when the current report hash cannot be computed', () => {
+  const r = evaluateRelease(exposed(), SHA, NOW, { reportExists: always, verifierState: goodVerifier(), currentReportHash: undefined })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /hash|cambi/i)
 })
 
 test('evaluateRelease blocks an exposed dossier when security_report is missing', () => {
@@ -186,6 +283,276 @@ test('reportChecker resolves relative paths and requires a non-empty file', () =
   assert.equal(check('no-existe.md'), false, 'archivo inexistente')
 })
 
+// parseReleaseVerdict: la ultima linea no vacia debe casar EXACTO con el formato; cualquier
+// desviacion (prosa despues, orden distinto, sha no hex, conteos ausentes) devuelve null (falla cerrado).
+test('parseReleaseVerdict reads a well-formed last line', () => {
+  const v = parseReleaseVerdict('bla bla\nRELEASE: CLOSED sha=deadbeef findings=3 closed=3 unverified=0')
+  assert.deepEqual(v, { verdict: 'CLOSED', sha: 'deadbeef', findings: 3, closed: 3, unverified: 0 })
+})
+
+test('parseReleaseVerdict reads OPEN with unverified counts', () => {
+  const v = parseReleaseVerdict('RELEASE: OPEN sha=deadbeef findings=3 closed=1 unverified=2')
+  assert.deepEqual(v, { verdict: 'OPEN', sha: 'deadbeef', findings: 3, closed: 1, unverified: 2 })
+})
+
+test('parseReleaseVerdict rejects text trailing after the verdict line', () => {
+  assert.equal(parseReleaseVerdict('RELEASE: CLOSED sha=deadbeef findings=1 closed=1 unverified=0\ngracias'), null)
+})
+
+test('parseReleaseVerdict rejects a non-hex or wrong-length sha', () => {
+  assert.equal(parseReleaseVerdict('RELEASE: CLOSED sha=zzzz findings=1 closed=1 unverified=0'), null)
+  assert.equal(parseReleaseVerdict('RELEASE: CLOSED sha=deadbeefff findings=1 closed=1 unverified=0'), null)
+})
+
+test('parseReleaseVerdict rejects a missing field and non-string input', () => {
+  assert.equal(parseReleaseVerdict('RELEASE: CLOSED sha=deadbeef findings=1 closed=1'), null)
+  assert.equal(parseReleaseVerdict(null), null)
+  assert.equal(parseReleaseVerdict(''), null)
+})
+
+// --- subagent-stop: persiste el veredicto atado a (HEAD8, sha256(reporte)) en claude-review.json.
+test('subagent-stop persists a CLOSED verdict bound to HEAD and the report hash', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  const state = readReviewState(repo.dir)['release-verifier']
+  assert.equal(state.verdict, 'CLOSED')
+  assert.equal(state.sha, repo.sha)
+  assert.equal(state.reportHash, repo.reportHash)
+  assert.equal(state.unverified, 0)
+})
+
+test('subagent-stop blocks when the verifier did not write the exact RELEASE line', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: 'cerre todo, confia en mi' })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /RELEASE:/)
+})
+
+test('subagent-stop blocks a verdict whose sha does not match HEAD, and persists nothing', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: 'aaaaaaaa' }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /HEAD|commit|SHA/i)
+  assert.throws(() => readReviewState(repo.dir), /ENOENT|Unexpected/)
+})
+
+test('subagent-stop refuses to sign over a dirty tree', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  writeFileSync(join(repo.dir, 'reports/pentest.md'), '# pentest\nchanged after commit')
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /suci|limpio|dirty/i)
+})
+
+test('subagent-stop ignores a non-release-verifier agent', () => {
+  const repo = makeRepo()
+  const r = runSubagentStop(repo.dir, { agent_type: 'code-reviewer', last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0)
+  assert.equal(r.stdout.trim(), '')
+})
+
+test('subagent-stop persists the dedup Regresion paths (backticks tolerated) in tests', () => {
+  // Formato real del SKILL: los backticks envuelven toda la expresion `Regresion: path::test`.
+  const body = `# pentest
+- **\`Regresion: tests/a.test.mjs::x\`**
+- Regresion: tests/a.test.mjs::y
+- Regresion: tests/b.test.mjs::z
+`
+  const repo = makeRepo({ reportBody: body })
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, findings: 3, closed: 3 }) })
+  assert.equal(r.status, 0, r.stderr)
+  const state = readReviewState(repo.dir)['release-verifier']
+  assert.deepEqual(state.tests, ['tests/a.test.mjs', 'tests/b.test.mjs'])
+})
+
+test('subagent-stop drops hostile Regresion paths (traversal, absolute) from tests', () => {
+  const body = `# pentest
+Regresion: tests/a.test.mjs::ok
+Regresion: ../../../etc/passwd::evil
+Regresion: /etc/passwd::evil
+`
+  const repo = makeRepo({ reportBody: body })
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  // Verdicto OPEN para no chocar con el cross-check de findings (solo probamos el filtrado de tests).
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, verdict: 'OPEN', findings: 3, closed: 1, unverified: 2 }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(readReviewState(repo.dir)['release-verifier'].tests, ['tests/a.test.mjs'])
+})
+
+test('subagent-stop blocks a CLOSED verdict when a Regresion path is invalid (cannot be closed)', () => {
+  const body = `# pentest
+Regresion: tests/a.test.mjs::ok
+Regresion: ../../../etc/passwd::evil
+`
+  const repo = makeRepo({ reportBody: body })
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, findings: 2, closed: 2 }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /invalida|sale del repo|cerrad/i)
+  assert.throws(() => readReviewState(repo.dir))
+})
+
+test('subagent-stop does not count a prose mention of Regresion without a path', () => {
+  // Solo las lineas con `path::test` cuentan; una mencion en prosa no infla el conteo.
+  const body = `# pentest
+Regresion: ver mas abajo
+Regresion: tests/a.test.mjs::x
+Regresion: tests/b.test.mjs::y
+`
+  const repo = makeRepo({ reportBody: body })
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, findings: 2, closed: 2 }) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(readReviewState(repo.dir)['release-verifier'].tests, ['tests/a.test.mjs', 'tests/b.test.mjs'])
+})
+
+test('subagent-stop blocks a CLOSED verdict whose findings do not match the report', () => {
+  const repo = makeRepo() // reporte con 2 lineas Regresion
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, findings: 0, closed: 0 }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /cuadra|Regresion|conteo/i)
+  assert.throws(() => readReviewState(repo.dir))
+})
+
+test('subagent-stop blocks when the dossier has no security_report', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ migrations_state: 'none' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /security_report/i)
+})
+
+test('subagent-stop blocks when the named report is unreadable', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/no-existe.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /reporte|leer/i)
+})
+
+test('subagent-stop with stop_hook_active persists a corrected verdict without emitting block', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }), stop_hook_active: true })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(r.stdout.trim(), '', 'no re-bloquea en bucle')
+  assert.equal(readReviewState(repo.dir)['release-verifier'].verdict, 'CLOSED')
+})
+
+test('subagent-stop refuses a dirty tree even when the modified file sorts before the dossier', () => {
+  // Regresion del bug del trim: una primera entrada del porcelain es " M tests/a.test.mjs". Con el
+  // dossier tambien presente (sin trackear), la suciedad real no debe quedar exenta.
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, 'tests/a.test.mjs'), '// a modificado\n')
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  const out = JSON.parse(r.stdout)
+  assert.equal(out.decision, 'block')
+  assert.match(out.reason, /suci|limpio/i)
+})
+
+test('subagent-stop preserves other agents already in claude-review.json', () => {
+  const repo = makeRepo()
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify({ security_report: 'reports/pentest.md' }))
+  const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], { cwd: repo.dir, encoding: 'utf8' }).trim()
+  writeFileSync(join(repo.dir, gitDir, 'claude-review.json'), JSON.stringify({ 'code-reviewer': { verdict: 'APPROVE' } }))
+  const r = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(r.status, 0, r.stderr)
+  const state = readReviewState(repo.dir)
+  assert.equal(state['code-reviewer'].verdict, 'APPROVE', 'la entrada previa sobrevive')
+  assert.equal(state['release-verifier'].verdict, 'CLOSED')
+})
+
+test('the deploy gate denies an exposed release with a persisted OPEN verdict', () => {
+  const repo = makeRepo()
+  const dossier = {
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen',
+    superficie_expuesta: true, security_report: 'reports/pentest.md', qa_report: 'reports/qa.md',
+  }
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify(dossier))
+  runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha, verdict: 'OPEN', findings: 2, closed: 1, unverified: 1 }) })
+  const deploy = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: repo.dir }),
+    encoding: 'utf8',
+  })
+  const out = JSON.parse(deploy.stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /OPEN|unverified|cerr/i)
+})
+
+test('the deploy gate denies an exposed release that was never signed', () => {
+  const repo = makeRepo()
+  const dossier = {
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen',
+    superficie_expuesta: true, security_report: 'reports/pentest.md', qa_report: 'reports/qa.md',
+  }
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify(dossier))
+  const deploy = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: repo.dir }),
+    encoding: 'utf8',
+  })
+  const out = JSON.parse(deploy.stdout)
+  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /release-verifier/i)
+})
+
+test('resolveStatePath keeps an absolute git-dir out of the working tree', () => {
+  const abs = resolveStatePath('/proj', '/var/repo/.git')
+  assert.equal(abs, '/var/repo/.git/claude-review.json')
+  const rel = resolveStatePath('/proj', '.git')
+  assert.equal(rel, '/proj/.git/claude-review.json')
+})
+
+test('evaluateRelease blocks an exposed OPEN verdict with internally consistent counts', () => {
+  // Aun con closed===findings y unverified consistente, OPEN nunca habilita el deploy.
+  const r = evaluateRelease(exposed(), SHA, NOW, { ...exposedOk, verifierState: goodVerifier({ verdict: 'OPEN' }) })
+  assert.equal(r.allow, false)
+  assert.match(r.reason, /OPEN|cerr/i)
+})
+
+// pre-deploy end-to-end sobre un repo real: con el veredicto persistido, el deploy pasa; si el
+// reporte cambia despues de firmar, el gate lo detecta por el hash y deniega.
+test('the deploy gate allows an exposed release once the verifier signed, and blocks if the report then changes', () => {
+  const repo = makeRepo()
+  const dossier = {
+    sha: repo.sha, ci_green: true, approvals: { qa: true, security: true, release: true },
+    rollback_plan: 'revert', migrations_state: 'none', owner: 'karen',
+    superficie_expuesta: true, security_report: 'reports/pentest.md', qa_report: 'reports/qa.md',
+  }
+  writeFileSync(join(repo.dir, '.release-approval.json'), JSON.stringify(dossier))
+  const sign = runSubagentStop(repo.dir, { last_assistant_message: releaseLine({ sha: repo.sha }) })
+  assert.equal(sign.status, 0, sign.stderr)
+
+  const deploy = () => spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: repo.dir }),
+    encoding: 'utf8',
+  })
+  const ok = deploy()
+  assert.equal(ok.stdout.trim(), '', `deberia permitir; stdout: ${ok.stdout}`)
+
+  // El reporte cambia despues de firmar: el hash ya no casa -> deny.
+  writeFileSync(join(repo.dir, 'reports/pentest.md'), '# pentest\notro contenido')
+  const blocked = JSON.parse(deploy().stdout)
+  assert.equal(blocked.hookSpecificOutput.permissionDecision, 'deny')
+  assert.match(blocked.hookSpecificOutput.permissionDecisionReason, /hash|cambi/i)
+})
+
 // --- entrypoint (spawn): sin esto, un main() que referencia una funcion no importada crashea
 // (ReferenceError, exit 1) y NO deniega, dejando pasar el deploy. El unit test no lo veria.
 test('the hook entrypoint denies an exposed release whose reports are missing, without crashing', () => {
@@ -199,18 +566,11 @@ test('the hook entrypoint denies an exposed release whose reports are missing, w
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /security_report|qa_report/i)
 })
 
-test('the hook entrypoint allows an exposed release whose reports exist with content', () => {
-  const r = runHook(e2eDossier({ superficie_expuesta: true, security_report: 'reports/pentest.md', qa_report: 'reports/qa.md' }))
-  // El dir ya existe; escribimos los reportes reales y re-corremos contra ese mismo dossier.
-  mkdirSync(join(r.dir, 'reports'))
-  writeFileSync(join(r.dir, 'reports/pentest.md'), '# pentest\nok')
-  writeFileSync(join(r.dir, 'reports/qa.md'), '# qa\nok')
-  const r2 = spawnSync(process.execPath, [HOOK], {
-    input: JSON.stringify({ tool_input: { command: 'vercel --prod --yes' }, cwd: r.dir }),
-    encoding: 'utf8',
-  })
-  assert.equal(r2.status, 0, `stderr: ${r2.stderr}`)
-  assert.equal(r2.stdout.trim(), '', 'sin payload de deny: el deploy queda habilitado por el gate')
+test('the hook entrypoint allows a non-exposed release without consulting the verifier', () => {
+  // Sin superficie expuesta, el gate no exige reportes ni veredicto del release-verifier.
+  const r = runHook(e2eDossier({ superficie_expuesta: false }))
+  assert.equal(r.status, 0, `stderr: ${r.stderr}`)
+  assert.equal(r.stdout.trim(), '', 'sin payload de deny: el deploy queda habilitado por el gate')
 })
 
 test('the hook entrypoint ignores a non-deploy command', () => {
