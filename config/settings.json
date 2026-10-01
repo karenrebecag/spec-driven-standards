@@ -121,6 +121,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "research-verifier",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/research-gate.mjs subagent-stop",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PreToolUse": [
