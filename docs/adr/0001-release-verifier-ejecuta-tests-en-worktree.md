@@ -1,6 +1,6 @@
 # ADR 0001 — El release-verifier ejecuta tests en un worktree efímero
 
-Fecha: 2026-09-30 · Estado: Propuesto (pendiente de firma de Karen)
+Fecha: 2026-09-30 · Estado: Aceptado
 Programa: release-verifier · Brief: `docs/research/release-verifier.md`
 
 ## Contexto

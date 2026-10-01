@@ -1,6 +1,6 @@
 # ADR 0002 — Contrato del release-gate: clave `release-verifier` y deny en pre-deploy
 
-Fecha: 2026-09-30 · Estado: Propuesto (pendiente de firma de Karen)
+Fecha: 2026-09-30 · Estado: Aceptado
 Programa: release-verifier · Brief: `docs/research/release-verifier.md`
 
 ## Contexto
