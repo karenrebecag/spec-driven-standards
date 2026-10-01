@@ -21,6 +21,7 @@ import {
   parseResearchVerdict,
   briefHashOf,
   resolveStatePath,
+  flipsBriefToAprobado,
   evaluateEdit,
 } from './research-gate.mjs'
 
@@ -163,6 +164,46 @@ test('briefAllows: un AUTO exige el veredicto RESEARCH:AUTO firmado atado al has
 test('resolveStatePath: respeta un git-dir absoluto (worktree) y une el relativo', () => {
   assert.equal(resolveStatePath('/r', '.git'), '/r/.git/claude-review.json')
   assert.equal(resolveStatePath('/r', '/abs/wt/.git'), '/abs/wt/.git/claude-review.json')
+})
+
+const headMd = (estado, body = '') => `# t\n\nSlug: x | Nivel: standard | Fecha: 2026-10-01 | Estado: ${estado}\nVersiones: x=1\n${body}`
+
+test('flipsBriefToAprobado: un Write que deja el header en APROBADO dispara; AUTO/BORRADOR no', () => {
+  assert.equal(flipsBriefToAprobado('Write', { content: headMd('APROBADO') }), true)
+  assert.equal(flipsBriefToAprobado('Write', { content: headMd('AUTO') }), false)
+  assert.equal(flipsBriefToAprobado('Write', { content: headMd('BORRADOR') }), false)
+  assert.equal(flipsBriefToAprobado('Write', {}), false)
+})
+
+test('flipsBriefToAprobado: reconstruye el resultado, no inspecciona el fragmento (cierra las evasiones)', () => {
+  const auto = headMd('AUTO')
+  // Reemplazo de solo el valor.
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: 'AUTO', new_string: 'APROBADO' }, auto), true)
+  // Valor + contexto: el fragmento no trae el token "Estado:", pero el resultado si queda APROBADO.
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: 'AUTO\nVersiones', new_string: 'APROBADO\nVersiones' }, auto), true)
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: 'AUTO', new_string: 'APROBADO por Karen' }, auto), true)
+  // Partido en varios edits de un MultiEdit: se aplican en secuencia sobre el contenido.
+  assert.equal(
+    flipsBriefToAprobado('MultiEdit', { edits: [{ old_string: 'AUTO', new_string: 'APRO' }, { old_string: 'APRO', new_string: 'APROBADO' }] }, auto),
+    true,
+  )
+  // replace_all tambien se reproduce.
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: 'AUTO', new_string: 'APROBADO', replace_all: true }, auto), true)
+  // Insertar un header APROBADO ANTES del real: gana la primera ocurrencia (como briefVerdict).
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: '# t', new_string: '# t\nEstado: APROBADO' }, auto), true)
+  // El reemplazo es literal (replacer-funcion): `$&` NO se expande al match. Sin funcion daria
+  // "APROBADOAUTO", que no es APROBADO exacto y no dispararia: la asercion fija el comportamiento.
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: 'AUTO', new_string: 'APROBADO$&' }, auto), true)
+})
+
+test('flipsBriefToAprobado: no sobre-bloquea un brief que YA es APROBADO, ni la prosa del cuerpo', () => {
+  const aprobado = headMd('APROBADO')
+  // Edicion del cuerpo de un brief ya aprobado por Karen: el Estado no cambia, no se bloquea.
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: '# t', new_string: '# titulo nuevo' }, aprobado), false)
+  // El header manda (primera ocurrencia): "Estado: APROBADO" en el cuerpo de un brief AUTO no dispara.
+  const autoConProsa = headMd('AUTO', 'ejemplo: una linea `Estado: APROBADO` en el cuerpo\n')
+  assert.equal(flipsBriefToAprobado('Write', { content: autoConProsa }), false)
+  assert.equal(flipsBriefToAprobado('Edit', { old_string: '# t', new_string: '# otro' }, autoConProsa), false)
 })
 
 test('briefAllows: APROBADO (valvula manual de Karen) habilita sin veredicto firmado', () => {
@@ -544,6 +585,44 @@ test('CLI: un estado corrupto en claude-review.json deniega, no revienta', () =>
   mkdirSync(join(p, '..'), { recursive: true })
   writeFileSync(p, 'no es json {')
   assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: lines(40) }), 'deny')
+})
+
+// ---- APROBADO es la valvula MANUAL de Karen: una tool de edicion no puede ponerlo ----
+
+test('CLI: cambiar un brief a Estado:APROBADO con una tool de edicion se deniega (Write, Edit, MultiEdit)', () => {
+  const repo = makeRepo()
+  mkdirSync(join(repo, 'docs/research'), { recursive: true })
+  const b = join(repo, 'docs/research/demo.md')
+  const header = 'Slug: demo | Nivel: standard | Fecha: 2026-10-01 | Estado: APROBADO'
+  assert.equal(run(repo, 'Write', { file_path: b, content: `# x\n\n${header}\nVersiones: x=1\n` }), 'deny')
+  // Edit/MultiEdit sobre un brief AUTO existente: se reconstruye el resultado.
+  writeFileSync(b, brief(AUTO))
+  assert.equal(run(repo, 'Edit', { file_path: b, old_string: 'AUTO', new_string: 'APROBADO por Karen' }), 'deny')
+  assert.equal(run(repo, 'MultiEdit', { file_path: b, edits: [{ old_string: 'AUTO', new_string: 'APRO' }, { old_string: 'APRO', new_string: 'APROBADO' }] }), 'deny')
+})
+
+test('CLI: escribir el brief con AUTO o BORRADOR por tool sigue pasando', () => {
+  const repo = makeRepo()
+  mkdirSync(join(repo, 'docs/research'), { recursive: true })
+  const b = join(repo, 'docs/research/demo.md')
+  assert.equal(run(repo, 'Write', { file_path: b, content: brief(AUTO) }), 'allow')
+  writeFileSync(b, brief(AUTO))
+  assert.equal(run(repo, 'Edit', { file_path: b, old_string: 'AUTO', new_string: 'BORRADOR' }), 'allow')
+})
+
+test('CLI: INDEX.md no es un brief; la regla de APROBADO no aplica', () => {
+  const repo = makeRepo()
+  mkdirSync(join(repo, 'docs/research'), { recursive: true })
+  const idx = join(repo, 'docs/research/INDEX.md')
+  assert.equal(run(repo, 'Write', { file_path: idx, content: '# Index\n\n| x | Estado: APROBADO |\n' }), 'allow')
+})
+
+test('CLI: APROBADO en un archivo de codigo no lo toca esta regla (pasa por el gate normal)', () => {
+  const repo = makeRepo()
+  writeBrief(repo)
+  sign(repo)
+  // .ts con el texto Estado:APROBADO: no es un brief, la regla de APROBADO no aplica; el brief firmado habilita.
+  assert.equal(run(repo, 'Write', { file_path: join(repo, 'src/c.ts'), content: `// Estado: APROBADO\n${lines(40)}` }), 'allow')
 })
 
 test('CLI: falla abierto sin salida ante git roto, stdin invalido u otras tools', () => {

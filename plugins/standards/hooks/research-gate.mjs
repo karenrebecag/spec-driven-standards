@@ -25,9 +25,11 @@
 // veredicto RESEARCH atado al sha256 del brief (clave `research-verifier` en claude-review.json), y
 // aqui se exige que exista y case el hash. Antes se confiaba en el campo Estado, que un agente podia
 // escribir sin correr el verificador.
-// HACK: APROBADO es la valvula manual de Karen tras un ESCALATE (lo pone con `! ...`/sed). El gate no
-// puede distinguir su edicion de la de un agente, igual que `! git commit` no pasa por PreToolUse: se
-// acepta el campo como autoridad humana. Cerrarlo exigiria que el override tambien se firme.
+// APROBADO es la valvula manual de Karen tras un ESCALATE. Ella la abre con `! sed`/`! ...`, que corre
+// fuera de PreToolUse (como `! git commit`). Una TOOL DE EDICION que cambie el Estado de un brief a
+// APROBADO se deniega (flipsBriefToAprobado): por ese camino el campo es autoridad humana, no un bypass
+// que un agente se ponga a si mismo. Residual: un agente aun podria escribirlo por Bash (sed -i, echo),
+// que no pasa por este hook -- es el mismo hueco de Bash del HACK de arriba, no se cierra aqui.
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -91,6 +93,53 @@ export function isGatedPath(absPath, repoRoot, home) {
   if (!isCode(absPath) && !isDepFile(absPath)) return false
   const rel = toPosix(relative(repoRoot, absPath))
   return !(rel.startsWith(RESEARCH_DIR) && rel.endsWith('.md'))
+}
+
+// true si absPath es un brief (no el INDEX), relativo a la raiz del repo.
+function isBriefPath(absPath, repoRoot) {
+  const rel = toPosix(relative(repoRoot, absPath))
+  return rel.startsWith(RESEARCH_DIR) && rel.endsWith('.md') && !rel.endsWith('/INDEX.md')
+}
+
+// El Estado declarado del header: MISMA regex que usa briefVerdict, asi lo que se detecta aqui es
+// exactamente lo que el gate honra como APROBADO. Un formato no canonico (minusculas, **negrita**)
+// no lo lee ninguno de los dos, asi que no habilita y no hay que vigilarlo.
+function estadoOf(md) {
+  return (String(md).match(/Estado:\s*([A-Z]+)/) || [])[1] || ''
+}
+
+// Reproduce la edicion propuesta sobre el contenido actual, como lo haria la tool, para poder leer el
+// Estado RESULTANTE en vez de adivinarlo del fragmento (un reemplazo con contexto o partido en varios
+// edits escaparia a una inspeccion por texto). Reemplazo literal (replacer-funcion: new_string puede
+// traer `$&`/`$1`). old_string vacio = contenido nuevo, como la tool.
+function applyEdit(toolName, input, current) {
+  if (toolName === 'Write') return typeof input.content === 'string' ? input.content : current
+  if (toolName === 'NotebookEdit') return typeof input.new_source === 'string' ? input.new_source : current
+  const edits =
+    toolName === 'MultiEdit'
+      ? input.edits || []
+      : [{ old_string: input.old_string, new_string: input.new_string, replace_all: input.replace_all }]
+  let out = current
+  for (const e of edits) {
+    if (typeof e.new_string !== 'string') continue
+    if (e.old_string === '' || e.old_string === undefined) {
+      out = e.new_string
+      continue
+    }
+    if (typeof e.old_string !== 'string') continue
+    out = e.replace_all
+      ? out.split(e.old_string).join(e.new_string)
+      : out.replace(e.old_string, () => e.new_string)
+  }
+  return out
+}
+
+// Una tool de edicion no puede CAMBIAR el Estado de un brief A APROBADO: es la aprobacion MANUAL de
+// Karen, que ella hace con `! sed`/`! ...` (fuera de PreToolUse). Mira el Estado antes y despues de
+// la edicion, asi no sobre-bloquea una edicion legitima de un brief que Karen ya aprobo.
+export function flipsBriefToAprobado(toolName, input, currentMd = '') {
+  if (!input) return false
+  return estadoOf(applyEdit(toolName, input, currentMd)) === 'APROBADO' && estadoOf(currentMd) !== 'APROBADO'
 }
 
 // Listas de git con -z: sin comillas para nombres no ASCII y sin ambiguedad con saltos de linea.
@@ -365,6 +414,24 @@ export function decide(input, home = realHome()) {
     return null // fuera de un repo git
   }
   const real = resolve(realpathSync(dir), relative(dir, target))
+  if (isBriefPath(real, root)) {
+    let current = ''
+    try {
+      current = readFileSync(real, 'utf8')
+    } catch {
+      current = '' // brief nuevo: no existe todavia
+    }
+    if (flipsBriefToAprobado(input.tool_name, ti, current)) {
+      return {
+        allow: false,
+        reason:
+          'Edicion bloqueada por research-gate: Estado: APROBADO es la aprobacion MANUAL de Karen. ' +
+          'Un agente no la pone por una tool de edicion; Karen la aplica fuera de PreToolUse (`! sed`/`! ...`). ' +
+          'Deja el brief en AUTO para que research-verifier lo firme, o pidele a Karen que apruebe si escala.',
+      }
+    }
+    return null // cualquier otra edicion del brief nunca esta gated
+  }
   if (!isGatedPath(real, root, home)) return null
 
   const base = branchBase(root)

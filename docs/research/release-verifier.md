@@ -17,6 +17,13 @@ Tres decisiones grises, cada una con opciones y evidencia en contra:
 ## Reutilizacion
 
 - PR-1 (release-verifier + modo subagent-stop del gate): en main (PR #13).
+- **PR-A (esta rama): cerrar el camino de edit-tools a APROBADO.** Decision de Karen (2026-10-01).
+  Una tool de edicion (Write/Edit/MultiEdit/NotebookEdit) que CAMBIE el Estado de un brief a APROBADO
+  se deniega; se reconstruye el contenido resultante y se lee el Estado con la misma regex que el
+  gate honra, asi no hay evasion por fragmento ni falso positivo en prosa. La aprobacion manual de
+  Karen (`! sed`/`! ...`, fuera de PreToolUse) sigue siendo la via. Residual conocido: un agente aun
+  podria escribirlo por Bash (mismo hueco de Bash ya marcado como HACK; no se cierra aqui). Sin
+  investigacion nueva (node=22).
 - **PR-4 (esta rama): Fase 4 — retirar el HACK de research-gate (D3).** Decision de Karen
   (2026-10-01): "AUTO firmado; APROBADO = valvula manual". research-verifier persiste su veredicto
   `RESEARCH:` via subagent-stop, atado al sha256 del brief; research-gate exige ese veredicto AUTO
