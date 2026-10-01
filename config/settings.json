@@ -111,6 +111,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "release-verifier",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $HOME/.claude/hooks/release-gate.mjs subagent-stop",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "PreToolUse": [
