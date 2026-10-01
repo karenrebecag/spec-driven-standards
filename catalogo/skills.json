@@ -11,6 +11,18 @@
   ],
   "skills": [
     {
+      "nombre": "ascii-banner",
+      "carpeta": "ascii-banner",
+      "area": "standards",
+      "origen": "propia",
+      "plugin": "standards",
+      "licencia": null,
+      "fuente": null,
+      "bootstrap": false,
+      "descripcion": "Genera texto en arte ASCII (tipografia ANSI Shadow, bloques ██╗) para encabezados de README, banners de CLI o docs, opcionalmente con marco de doble linea. Usar cuando se pida \"arte ascii\", \"titulo en",
+      "obtener": "/plugin install standards@spec-driven-standards"
+    },
+    {
       "nombre": "lean-review",
       "carpeta": "lean-review",
       "area": "standards",

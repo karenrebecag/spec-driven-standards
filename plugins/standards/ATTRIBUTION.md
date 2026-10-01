@@ -15,4 +15,7 @@ Importado de terceros:
 | `skills/api-design-patterns/` | rohitg00/awesome-claude-code-toolkit | Apache-2.0 |
 | `skills/git-advanced/` | rohitg00/awesome-claude-code-toolkit | Apache-2.0 |
 
+La skill `ascii-banner` es propia; la fuente que usa (ANSI Shadow, xero/figlet-fonts, autor y
+licencia no declarados) no se redistribuye: se descarga al primer uso con commit y hash fijados.
+
 Licencias retenidas en `licenses/`.

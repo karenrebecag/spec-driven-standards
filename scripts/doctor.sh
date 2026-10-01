@@ -18,6 +18,7 @@ for par in \
   "$CLAUDE/skills/ship:$REPO/plugins/standards/skills/ship" \
   "$CLAUDE/skills/pentest:$REPO/plugins/security/skills/pentest" \
   "$CLAUDE/skills/lean-review:$REPO/plugins/standards/skills/lean-review" \
+  "$CLAUDE/skills/ascii-banner:$REPO/plugins/standards/skills/ascii-banner" \
   "$CLAUDE/skills/api-design-patterns:$REPO/plugins/standards/skills/api-design-patterns" \
   "$CLAUDE/skills/git-advanced:$REPO/plugins/standards/skills/git-advanced" \
   "$CLAUDE/skills/security-hardening:$REPO/plugins/security/skills/security-hardening" \

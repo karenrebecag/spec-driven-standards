@@ -18,6 +18,7 @@ AGENTS_DIR = "../../.agents"
 # Un area por skill. Las familias (offensive-*, flowstudio-*) se resuelven por prefijo.
 AREA = {
     "lean-review": "standards",
+    "ascii-banner": "standards",
     "cortex-implementation": "atom",
     "cortex-reference": "atom",
     "ui-ux-pro-max": "web",
@@ -59,6 +60,7 @@ AREAS = ["standards", "atom", "web", "martech", "security", "automation", "mac-o
 # Lo que vive en plugins/ de este repo: skill -> plugin.
 PROPIAS = {
     "lean-review": "standards",
+    "ascii-banner": "standards",
     "email-campaigns": "martech",
     "security-audit": "security",
     "clop-compress": "mac-ops",
